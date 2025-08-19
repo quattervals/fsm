@@ -12,7 +12,7 @@ pub enum LatheCommand {
     Acknowledge,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum LatheResponse {
     Status {
         state: &'static str,
@@ -339,5 +339,119 @@ impl LatheController {
             .join()
             .map_err(|_| "Thread join failed")?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    mod state_transitions {
+        use super::*;
+
+        #[test]
+        fn off_to_spinning_transition() {
+            let data = Box::new(LatheData::default());
+            let lathe = Lathe::<Off>::new(data);
+
+            let spinning_lathe = lathe.start_spinning(1500);
+
+            assert_eq!(spinning_lathe.business_data.revs, 1500);
+        }
+
+        #[test]
+        fn spinning_to_feeding_transition() {
+            let data = Box::new(LatheData::default());
+            let lathe = Lathe::<Off>::new(data).start_spinning(1000);
+
+            let feeding_lathe = lathe.feed(250);
+
+            assert_eq!(feeding_lathe.business_data.feed, 250);
+            assert_eq!(feeding_lathe.business_data.revs, 1000);
+        }
+
+        #[test]
+        fn feeding_to_spinning_transition() {
+            let data = Box::new(LatheData::default());
+            let lathe = Lathe::<Off>::new(data).start_spinning(1200).feed(300);
+
+            let spinning_lathe = lathe.stop_feed();
+
+            assert_eq!(spinning_lathe.business_data.feed, 0);
+            assert_eq!(spinning_lathe.business_data.revs, 1200);
+        }
+
+        #[test]
+        fn emergency_stop_from_feeding() {
+            let data = Box::new(LatheData::default());
+            let lathe = Lathe::<Off>::new(data).start_spinning(1000).feed(200);
+
+            let notaus_lathe = lathe.notaus();
+            let off_lathe = notaus_lathe.acknowledge();
+
+            assert_eq!(off_lathe.business_data.revs, 0);
+            assert_eq!(off_lathe.business_data.feed, 0);
+        }
+    }
+
+    mod controller_tests {
+        use super::*;
+
+        #[test]
+        fn command_sequence() {
+            let controller = LatheController::new();
+
+            controller
+                .send_command(LatheCommand::StartSpinning(800))
+                .unwrap();
+            controller.send_command(LatheCommand::Feed(150)).unwrap();
+
+            std::thread::sleep(std::time::Duration::from_millis(10));
+            let responses = controller.check_responses();
+            assert_eq!(responses.len(), 2);
+            assert_eq!(responses[0], LatheResponse::Status { state: "Spinning" });
+            assert_eq!(responses[1], LatheResponse::Status { state: "Feeding" });
+
+            controller.shutdown().unwrap();
+        }
+
+        #[test]
+        fn emergency_stop() {
+            let controller = LatheController::new();
+
+            controller
+                .send_command(LatheCommand::StartSpinning(1000))
+                .unwrap();
+            controller.send_command(LatheCommand::Feed(200)).unwrap();
+            controller.send_command(LatheCommand::Notaus).unwrap();
+
+            std::thread::sleep(std::time::Duration::from_millis(10));
+            let responses = controller.check_responses();
+            assert_eq!(responses.len(), 3);
+            assert_eq!(responses[0], LatheResponse::Status { state: "Spinning" });
+            assert_eq!(responses[1], LatheResponse::Status { state: "Feeding" });
+            assert_eq!(responses[2], LatheResponse::Status { state: "Notaus" });
+
+            controller.shutdown().unwrap();
+        }
+
+        #[test]
+        fn invalid_transition() {
+            let controller = LatheController::new();
+
+            controller.send_command(LatheCommand::Feed(200)).unwrap();
+
+            std::thread::sleep(std::time::Duration::from_millis(10));
+            let responses = controller.check_responses();
+            assert_eq!(responses.len(), 1);
+            assert_eq!(
+                responses[0],
+                LatheResponse::InvalidTransition {
+                    current_state: "Off",
+                    attempted_command: String::from("Feed(200)")
+                }
+            );
+            controller.shutdown().unwrap();
+        }
     }
 }
