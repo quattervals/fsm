@@ -2,5 +2,8 @@
 name = "fsm"
 version = "0.1.0"
 edition = "2024"
+authors = ["Olimutz"]
+description = "Distributet FSM implementations"
+license = "MIT"
 
 [dependencies]
