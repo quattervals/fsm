@@ -1,7 +1,8 @@
-use std::fmt::Debug;
+use std::marker::PhantomData;
 
 fn main() {
-    let lathe = Lathe::<Off>::new();
+    let lathe_data: LatheData = Default::default();
+    let lathe = Lathe::<Off>::new(Box::new(lathe_data));
     lathe.print();
 
     let lathe = lathe.start_spinning(34);
@@ -26,90 +27,83 @@ pub struct Feeding;
 #[derive(Debug)]
 pub struct Notaus;
 
-#[derive(Debug)]
-pub struct Lathe<State> {
-    state: State,
+#[derive(Default, Debug)]
+pub struct LatheData {
     revs: u32,
     feed: u32,
 }
 
-impl<State> Lathe<State>
-where
-    State: Debug,
-{
-    pub fn new() -> Lathe<Off> {
+#[derive(Debug)]
+pub struct Lathe<State> {
+    state: PhantomData<State>,
+    business_data: Box<LatheData>,
+}
+
+impl<State> Lathe<State> {
+    pub fn new(data: Box<LatheData>) -> Lathe<Off> {
         Lathe {
-            state: Off,
-            revs: 0,
-            feed: 0,
+            state: PhantomData,
+            business_data: data,
         }
     }
 
     pub fn notaus(self) -> Lathe<Notaus> {
         Lathe {
-            state: Notaus,
-            revs: 0,
-            feed: 0,
+            state: PhantomData,
+            business_data: self.business_data,
         }
     }
 
     pub fn print(&self) {
-        println!(
-            "State {:?}, Rev: {}, Feed: {}",
-            self.state, self.revs, self.feed
-        )
-    }
-}
-
-impl Default for Lathe<Off> {
-    fn default() -> Self {
-        Self {
-            state: Off,
-            revs: 0,
-            feed: 0,
-        }
+        println!("State {:?}, Data {:#?}", self.state, self.business_data)
     }
 }
 
 impl Lathe<Off> {
-    pub fn start_spinning(self, revs: u32) -> Lathe<Spinning> {
+    pub fn start_spinning(mut self, revs: u32) -> Lathe<Spinning> {
+        self.business_data.revs = revs;
         Lathe {
-            state: Spinning,
-            revs,
-            feed: 0,
+            state: PhantomData,
+            business_data: self.business_data,
         }
     }
 }
 
 impl Lathe<Spinning> {
-    pub fn feed(self, feed: u32) -> Lathe<Feeding> {
+    pub fn feed(mut self, feed: u32) -> Lathe<Feeding> {
+        self.business_data.feed = feed;
+
         Lathe {
-            state: Feeding,
-            revs: self.revs,
-            feed,
+            state: PhantomData,
+            business_data: self.business_data,
         }
     }
-    pub fn off(self) -> Lathe<Off> {
-        Lathe::default()
+    pub fn off(mut self) -> Lathe<Off> {
+        self.business_data = Default::default();
+        Lathe {
+            state: PhantomData,
+            business_data: self.business_data,
+        }
     }
 }
 
 impl Lathe<Feeding> {
-    pub fn stop_feed(self) -> Lathe<Spinning> {
+    pub fn stop_feed(mut self) -> Lathe<Spinning> {
+        self.business_data.feed = 0;
+
         Lathe {
-            state: Spinning,
-            revs: self.revs,
-            feed: 0,
+            state: PhantomData,
+            business_data: self.business_data,
         }
     }
 }
 
 impl Lathe<Notaus> {
-    pub fn quittieren(self) -> Lathe<Off> {
+    pub fn quittieren(mut self) -> Lathe<Off> {
+        self.business_data = Default::default();
         Lathe {
-            state: Off,
-            revs: 0,
-            feed: 0,
+            state: PhantomData,
+            business_data: self.business_data,
         }
     }
 }
