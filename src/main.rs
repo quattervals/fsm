@@ -1,4 +1,4 @@
-use fsm::machines::lathe::{LatheController, LatheCommand};
+use fsm::machines::lathe::{LatheCommand, LatheController};
 use std::thread;
 use std::time::Duration;
 
@@ -10,7 +10,9 @@ fn main() {
 
     // Send some commands
     println!("Sending StartSpinning(1000) command...");
-    controller.send_command(LatheCommand::StartSpinning(1000)).unwrap();
+    controller
+        .send_command(LatheCommand::StartSpinning(1000))
+        .unwrap();
 
     // Give the thread time to process
     thread::sleep(Duration::from_millis(10));

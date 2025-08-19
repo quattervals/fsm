@@ -1,24 +1,28 @@
+# Distributed FSM Examples
+
+**Features**
+- Type Save FSM (type state pattern)
+- FSM run in their own thread
+- communication via message queues
+
+
+
+One such FSM is a simplistic lathe
+
 ```plantuml
 @startuml
 state "Off" as off
 state "Spindle Spinning" as spinning
 state "Feed" as feeding
-state "Notaus" as notaus
+state "Emergency Stop" as notaus
 
-[*] --> off
-' off --> off
 off --> spinning
-' spinning  --> spinning
 spinning --> feeding
 spinning --> off
 feeding --> spinning
-' feeding --> feeding
 off --> notaus
 spinning --> notaus
 feeding --> notaus
-notaus --> off: Quittieren
-
-
+notaus --> off: Acknowledge
 @enduml
-
 ```
