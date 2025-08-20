@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
-use std::sync::mpsc::{Receiver, Sender};
-use std::thread::{self, JoinHandle};
+
+use super::shared::{MachineController, StateHandler};
 
 #[derive(Debug)]
 pub enum LatheCommand {
@@ -133,14 +133,9 @@ impl LatheActor {
     }
 }
 
-/// Trait for state-specific command handling
-pub trait StateHandler {
-    fn handle_command(self, cmd: LatheCommand) -> (LatheActor, LatheResponse);
-}
-
 // State-specific handlers
 
-impl StateHandler for Lathe<Off> {
+impl StateHandler<LatheCommand, LatheActor, LatheResponse> for Lathe<Off> {
     fn handle_command(self, cmd: LatheCommand) -> (LatheActor, LatheResponse) {
         match cmd {
             LatheCommand::StartSpinning(revs) => {
@@ -168,7 +163,7 @@ impl StateHandler for Lathe<Off> {
     }
 }
 
-impl StateHandler for Lathe<Spinning> {
+impl StateHandler<LatheCommand, LatheActor, LatheResponse> for Lathe<Spinning> {
     fn handle_command(self, cmd: LatheCommand) -> (LatheActor, LatheResponse) {
         match cmd {
             LatheCommand::Feed(feed_rate) => {
@@ -203,7 +198,7 @@ impl StateHandler for Lathe<Spinning> {
     }
 }
 
-impl StateHandler for Lathe<Feeding> {
+impl StateHandler<LatheCommand, LatheActor, LatheResponse> for Lathe<Feeding> {
     fn handle_command(self, cmd: LatheCommand) -> (LatheActor, LatheResponse) {
         match cmd {
             LatheCommand::StopFeed => {
@@ -231,7 +226,7 @@ impl StateHandler for Lathe<Feeding> {
     }
 }
 
-impl StateHandler for Lathe<Notaus> {
+impl StateHandler<LatheCommand, LatheActor, LatheResponse> for Lathe<Notaus> {
     fn handle_command(self, cmd: LatheCommand) -> (LatheActor, LatheResponse) {
         match cmd {
             LatheCommand::Acknowledge => {
@@ -264,83 +259,14 @@ impl LatheActor {
     }
 }
 
-/// Thread runner for a single lathe
-pub struct LatheThread {
-    cmd_rx: Receiver<LatheCommand>,
-    response_tx: Sender<LatheResponse>,
-    actor: LatheActor,
-}
-
-impl LatheThread {
-    pub fn new(cmd_rx: Receiver<LatheCommand>, response_tx: Sender<LatheResponse>) -> Self {
-        Self {
-            cmd_rx,
-            response_tx,
-            actor: LatheActor::new(),
-        }
-    }
-
-    pub fn run(mut self) {
-        while let Ok(cmd) = self.cmd_rx.recv() {
-            let (new_actor, response) = self.actor.handle_command(cmd);
-            self.actor = new_actor;
-            let _ = self.response_tx.send(response);
-        }
+impl StateHandler<LatheCommand, LatheActor, LatheResponse> for LatheActor {
+    fn handle_command(self, cmd: LatheCommand) -> (LatheActor, LatheResponse) {
+        self.handle_command(cmd)
     }
 }
 
-/// Coordinator for the lathe thread
-pub struct LatheController {
-    cmd_tx: Sender<LatheCommand>,
-    response_rx: Receiver<LatheResponse>,
-    thread_handle: JoinHandle<()>,
-}
-
-impl Default for LatheController {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl LatheController {
-    pub fn new() -> Self {
-        let (cmd_tx, cmd_rx) = std::sync::mpsc::channel();
-        let (response_tx, response_rx) = std::sync::mpsc::channel();
-
-        let lathe_thread = LatheThread::new(cmd_rx, response_tx);
-        let thread_handle = thread::spawn(move || {
-            lathe_thread.run();
-        });
-
-        Self {
-            cmd_tx,
-            response_rx,
-            thread_handle,
-        }
-    }
-
-    pub fn send_command(&self, cmd: LatheCommand) -> Result<(), &'static str> {
-        self.cmd_tx.send(cmd).map_err(|_| "Failed to send command")
-    }
-
-    pub fn check_responses(&self) -> Vec<LatheResponse> {
-        let mut responses = Vec::new();
-        while let Ok(response) = self.response_rx.try_recv() {
-            responses.push(response);
-        }
-        responses
-    }
-
-    pub fn shutdown(self) -> Result<(), Box<dyn std::error::Error>> {
-        // Drop the command sender to signal the thread to exit
-        drop(self.cmd_tx);
-        // Wait for the thread to finish
-        self.thread_handle
-            .join()
-            .map_err(|_| "Thread join failed")?;
-        Ok(())
-    }
-}
+/// Type alias for LatheController using the generic MachineController
+pub type LatheController = MachineController<LatheCommand, LatheResponse, LatheActor>;
 
 #[cfg(test)]
 mod tests {
