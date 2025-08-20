@@ -6,12 +6,13 @@ kanban-plugin: board
 
 ## Todo
 
-- generalize handlers for any machine (not just lathe)
-- generalize macro for any machine (not just lathe)
-- make Tokio variant
-  - Actix Actor for FSM
-  - Send Message Structs
-- unit tests for lathe
+- [ ] generalize handlers for any machine (not just lathe)
+- [ ] make only necessary things public
+- [ ] generalize macro for any machine (not just lathe)
+- [ ] make Tokio variant
+	  - Actix Actor for FSM
+	  - Send Message Structs
+
 
 ## Doing (2)
 
@@ -19,7 +20,7 @@ kanban-plugin: board
 
 ## Done
 
-
+- [ ] unit tests for lathe
 
 
 
