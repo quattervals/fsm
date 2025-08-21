@@ -16,6 +16,7 @@ macro_rules! fsm {
         $from_state:ident: {
             $(
                 $method:ident($($param:ident: $type:ty),*) -> $to_state:ident
+                $($body:block)?
             ),*,
         } ,
     )*
@@ -23,11 +24,16 @@ macro_rules! fsm {
  $(
     println!("From State: {}", stringify!($from_state));
     $(
-        println!("  Method: {}", stringify!($method));
+        println!("  Method: {} -> {}", stringify!($method), stringify!($to_state));
         $(
-            println!("    Param: {}: {}", stringify!($param), stringify!($type));
+            print!("    Param: {}: {}", stringify!($param), stringify!($type));
+
         )*
-        println!("    To State: {}", stringify!($to_state));
+        print!("\n");
+
+        $(
+           println!("    body {}", stringify!($body));
+        )?
     )*
 )*
 };
