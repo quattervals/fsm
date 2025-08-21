@@ -1,3 +1,3 @@
 pub mod lathe;
-pub mod shared;
 pub mod mill;
+pub mod shared;
