@@ -2,6 +2,20 @@ use std::marker::PhantomData;
 use std::sync::mpsc;
 use std::thread::{self, JoinHandle};
 
+
+macro_rules! my_macro {
+    ($x:expr) => {
+        println!("Shared macro says: {}", $x);
+    };
+}
+
+pub(in crate::machines) use my_macro;
+
+
+
+
+
+
 /// Trait for state-specific command handling
 pub trait StateHandler<Command, Actor, Response> {
     fn handle_command(self, cmd: Command) -> (Actor, Response);

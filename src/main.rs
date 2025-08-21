@@ -1,8 +1,12 @@
 use fsm::machines::lathe::{LatheCommand, LatheController};
+use fsm::machines::mill::try_macro;
 use std::thread;
 use std::time::Duration;
 
 fn main() {
+
+    try_macro();
+
     println!("=== Threaded Lathe Demo ===\n");
 
     // Create a lathe controller (spawns the lathe thread)

@@ -17,6 +17,7 @@
 
 ## Don't
 - **Don't** Comment things in unit tests
+- **Don't** run the tests and start fixing things on your own. Ask first
 
 
 - **Do not**: Write down what you just did at the end of a task
