@@ -26,30 +26,30 @@ macro_rules! fsm {
     $(
         $from_state:ident: {
             $(
-                $method:ident($self:ident, $($param:ident: $type:ty),*) -> $to_state:ident
+                $method:ident($self:ident $(, $($param:ident: $type:ty),*)?) -> $to_state:ident
                 $({ $($body:stmt)* })?
             ),*,
         } ,
     )*
 ) => {
  $(
-    println!("From State: {}", stringify!($from_state));
-    $(
-        println!("  Method: {} -> {}", stringify!($method), stringify!($to_state));
-        $(
-            print!("    Param: {}: {}", stringify!($param), stringify!($type));
+    // println!("From State: {}", stringify!($from_state));
+    // $(
+    //     println!("  Method: {} -> {}", stringify!($method), stringify!($to_state));
+    //     // $(
+    //         // print!("    Param: {}: {}", stringify!($param), stringify!($type));
 
-        )*
-        print!("\n");
+    //     // )*
+    //     print!("\n");
 
-        $(
-           println!("    body {}", stringify!($($body)*));
-        )?
-    )*
+    //     $(
+    //        println!("    body {}", stringify!($($body)*));
+    //     )?
+    // )*
 
     impl FSM<$from_state> {
         $(
-            pub fn $method(mut $self, $($param: $type),*) -> FSM<$to_state> {
+            pub fn $method(mut $self $(, $($param: $type),+)?) -> FSM<$to_state> {
                 $($($body)*)?
                 FSM {
                    state: PhantomData,

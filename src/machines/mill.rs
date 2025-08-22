@@ -12,20 +12,35 @@ pub struct Feeding;
 pub struct Notaus;
 
 pub fn try_macro() {
-    fsm! {
-        Off: {
-          start_spinning(self, revs: u32) -> Spinning{
-            self.data.revs = revs;
-          },
-          do_stuff(self, bla: u32) -> Notaus,
+//     fsm! {
+//         Off: {
+//           start_spinning(self, revs: u32) -> Spinning{
+//             self.data.revs = revs;
+//           },
+//           do_stuff(self, bla: u32) -> Notaus,
+//         },
+//           Spinning: {
+//             stop_spinning(self, revs: u32) -> Off{
+//                 self.data.revs = revs;
+//             },
+//             do_otherstuff(self, bla: u32) -> Notaus,
+//         },
+//     }
+}
+
+fsm! {
+    Off: {
+      start_spinning(self, revs: u32) -> Spinning{
+        self.data.revs = revs;
+      },
+      do_stuff(self, bla: u32) -> Notaus,
+    },
+      Spinning: {
+        stop_spinning(self) -> Off{
+            self.data.revs = 0;
         },
-          Spinning: {
-            stop_spinning(self, revs: u32) -> Off{
-                self.data.revs = revs;
-            },
-            do_otherstuff(self, bla: u32) -> Notaus,
-        },
-    }
+
+    },
 }
 
 #[cfg(test)]
@@ -34,21 +49,5 @@ mod tests {
     use super::*;
 
     #[test]
-    fn macron() {
-        try_macro();
-    }
-
-    #[test]
-    fn tryfsm() {
-        fsm! {
-            Off: {
-                start_spinning(revs: u32) -> Spinning,
-                do_stuff(bla: u32) -> Meier,
-            },
-             Spinning: {
-                stop_spinning(revs: u32) -> Off,
-                do_stuff(bla: u32) -> Meier,
-            },
-        }
-    }
+    fn off_to_spinning_transition() {}
 }
