@@ -1,17 +1,29 @@
-use super::shared::fsm;
+use super::shared::{FSM, FsmData, fsm};
+
+use std::marker::PhantomData;
+
+#[derive(Debug)]
+pub struct Off;
+#[derive(Debug)]
+pub struct Spinning;
+#[derive(Debug)]
+pub struct Feeding;
+#[derive(Debug)]
+pub struct Notaus;
 
 pub fn try_macro() {
     fsm! {
         Off: {
-          start_spinning(revs: u32) -> Spinning,
-          do_stuff(bla: u32) -> Meier {
-            let x = 34;
-            data.revs = revs;
+          start_spinning(self, revs: u32) -> Spinning{
+            self.data.revs = revs;
           },
+          do_stuff(self, bla: u32) -> Notaus,
         },
           Spinning: {
-            stop_spinning(revs: u32, other: i32) -> Off,
-            do_stuff(bla: u32) -> Meier,
+            stop_spinning(self, revs: u32) -> Off{
+                self.data.revs = revs;
+            },
+            do_otherstuff(self, bla: u32) -> Notaus,
         },
     }
 }

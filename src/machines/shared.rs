@@ -10,13 +10,24 @@ macro_rules! my_macro {
 
 pub(in crate::machines) use my_macro;
 
+#[derive(Default, Debug)]
+pub struct FsmData {
+    pub revs: u32,
+    pub feed: u32,
+}
+
+pub struct FSM<State> {
+    pub state: PhantomData<State>,
+    pub data: Box<FsmData>,
+}
+
 macro_rules! fsm {
 (
     $(
         $from_state:ident: {
             $(
-                $method:ident($($param:ident: $type:ty),*) -> $to_state:ident
-                $($body:block)?
+                $method:ident($self:ident, $($param:ident: $type:ty),*) -> $to_state:ident
+                $({ $($body:stmt)* })?
             ),*,
         } ,
     )*
@@ -32,10 +43,26 @@ macro_rules! fsm {
         print!("\n");
 
         $(
-           println!("    body {}", stringify!($body));
+           println!("    body {}", stringify!($($body)*));
         )?
     )*
-)*
+
+    impl FSM<$from_state> {
+        $(
+            pub fn $method(mut $self, $($param: $type),*) -> FSM<$to_state> {
+                $($($body)*)?
+                FSM {
+                   state: PhantomData,
+                   data: $self.data,
+                }
+
+            }
+        )*
+
+    }
+  )*
+
+//   println!("Struct: {}", stringify!($struct));
 };
 }
 
