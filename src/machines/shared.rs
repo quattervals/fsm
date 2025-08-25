@@ -2,19 +2,10 @@ use std::marker::PhantomData;
 use std::sync::mpsc;
 use std::thread::{self, JoinHandle};
 
-macro_rules! my_macro {
-    ($x:expr) => {
-        println!("Shared macro says: {}", $x);
-    };
-}
-
-pub(in crate::machines) use my_macro;
-
 pub struct FSM<State, FsmData> {
     pub state: PhantomData<State>,
     pub data: Box<FsmData>,
 }
-
 
 macro_rules! fsm {
 (
@@ -27,7 +18,7 @@ macro_rules! fsm {
     $(
         $from_state:ident: {
             $(
-                $method:ident($self:ident $(, $($param:ident: $type:ty),*)?) -> $to_state:ident
+               $command_2:ident $(($($cmd_type:ty),*))? => $method:ident($self:ident $(, $($param:ident: $type:ty),*)?) -> $to_state:ident
                 $({ $($body:tt)* })?
             ),*,
         } ,
@@ -89,7 +80,7 @@ macro_rules! fsm {
 
   impl From<Box<$data>> for FsmWrapper {
     fn from(lathe_data: Box<$data>) -> Self {
-        FsmWrapper::Off(FSM::<$start_state>::new(lathe_data))
+        FsmWrapper::Off(FSM::<$start_state, $data>::new(lathe_data))
     }
   }
 
@@ -102,13 +93,42 @@ macro_rules! fsm {
   /// Type alias for LatheController using the generic MachineController
   pub type FsmController = $controller<$command, $response>;
   impl FsmController {
-  pub fn create(lathe_data: Box<$data>) -> Self {
-      $controller::new::<Box<$data>, FsmWrapper>(lathe_data)
+    pub fn create(lathe_data: Box<$data>) -> Self {
+        $controller::new::<Box<$data>, FsmWrapper>(lathe_data)
+    }
   }
-}
 
+  /// Message Handler implementations
+  $(
+    impl $state_handler<$command, $response, FsmWrapper> for FSM<$from_state, $data>{
+        fn handle_cmd(self, cmd: $command) -> (FsmWrapper, $response){
+            match cmd {
+                $(
+                    $command::$command_2$(($($param),+))? => {
+                        let new_fsm = self.$method($($($param),+)?);
+                        (
+                            FsmWrapper::$to_state(new_fsm),
+                            $response::Status {state: stringify!($to_state)},
+                        )
+                    }
+
+                )*
+                _ => (
+                            FsmWrapper::$from_state(self),
+                            $response::InvalidTransition {
+                                current_state: stringify!($from_state),
+                                attempted_command: format!("{:?}", cmd),
+                            }
+                    )
+
+            }
+        }
+    }
+
+  )*
 
 };
+
 }
 
 pub(in crate::machines) use fsm;
