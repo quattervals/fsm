@@ -1,4 +1,4 @@
-use fsm::machines::lathe::{LatheCommand, LatheController};
+use fsm::machines::lathe::{LatheCommand, LatheController, LatheData};
 use fsm::machines::mill::try_macro;
 use std::thread;
 use std::time::Duration;
@@ -9,7 +9,9 @@ fn main() {
     println!("=== Threaded Lathe Demo ===\n");
 
     // Create a lathe controller (spawns the lathe thread)
-    let controller = LatheController::new();
+
+    let lathe_data = LatheData::default();
+    let controller = LatheController::create(Box::new(lathe_data));
 
     // Send some commands
     println!("Sending StartSpinning(1000) command...");
