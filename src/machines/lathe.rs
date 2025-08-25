@@ -1,6 +1,6 @@
-use std::marker::PhantomData;
+use std::{marker::PhantomData};
 
-use super::shared::{MachineController, StateHandler};
+use super::shared::{MachineController, MachineController2, StateHandler, StateHandler2};
 
 #[derive(Debug)]
 pub enum LatheCommand {
@@ -268,9 +268,178 @@ impl StateHandler<LatheCommand, LatheActor, LatheResponse> for LatheActor {
 /// Type alias for LatheController using the generic MachineController
 pub type LatheController = MachineController<LatheCommand, LatheResponse, LatheActor>;
 
+#[derive(Debug)]
+pub enum LatheWrapper {
+    Off(Lathe<Off>),
+    Spinning(Lathe<Spinning>),
+    Feeding(Lathe<Feeding>),
+    Notaus(Lathe<Notaus>),
+}
+
+impl LatheWrapper {
+    pub fn new(lathe_data: Box<LatheData>) -> Self {
+        LatheWrapper::Off(Lathe::<Off>::new(lathe_data))
+    }
+}
+
+/// LatheActor dispatcher
+impl LatheWrapper {
+    pub fn handle_cmd(self, cmd: LatheCommand) -> (LatheWrapper, LatheResponse) {
+        match self {
+            LatheWrapper::Off(lathe) => lathe.handle_cmd(cmd),
+            LatheWrapper::Spinning(lathe) => lathe.handle_cmd(cmd),
+            LatheWrapper::Feeding(lathe) => lathe.handle_cmd(cmd),
+            LatheWrapper::Notaus(lathe) => lathe.handle_cmd(cmd),
+        }
+    }
+}
+
+impl StateHandler2<LatheCommand, LatheResponse, LatheWrapper> for LatheWrapper {
+    fn handle_cmd(self, cmd: LatheCommand) -> (LatheWrapper, LatheResponse) {
+        self.handle_cmd(cmd)
+    }
+}
+
+impl StateHandler2<LatheCommand, LatheResponse, LatheWrapper> for Lathe<Off> {
+    fn handle_cmd(self, cmd: LatheCommand) -> (LatheWrapper, LatheResponse) {
+        match cmd {
+            LatheCommand::StartSpinning(revs) => {
+                let new_lathe = self.start_spinning(revs);
+                (
+                    LatheWrapper::Spinning(new_lathe),
+                    LatheResponse::Status { state: "Spinning" },
+                )
+            }
+            LatheCommand::Notaus => {
+                let new_lathe = self.notaus();
+                (
+                    LatheWrapper::Notaus(new_lathe),
+                    LatheResponse::Status { state: "Notaus" },
+                )
+            }
+            _ => (
+                LatheWrapper::Off(self),
+                LatheResponse::InvalidTransition {
+                    current_state: "Off",
+                    attempted_command: format!("{:?}", cmd),
+                },
+            ),
+        }
+    }
+}
+
+impl StateHandler2<LatheCommand, LatheResponse, LatheWrapper> for Lathe<Spinning> {
+    fn handle_cmd(self, cmd: LatheCommand) -> (LatheWrapper, LatheResponse) {
+        match cmd {
+            LatheCommand::Feed(feed_rate) => {
+                let new_lathe = self.feed(feed_rate);
+                (
+                    LatheWrapper::Feeding(new_lathe),
+                    LatheResponse::Status { state: "Feeding" },
+                )
+            }
+            LatheCommand::StopSpinning => {
+                let new_lathe = self.off();
+                (
+                    LatheWrapper::Off(new_lathe),
+                    LatheResponse::Status { state: "Off" },
+                )
+            }
+            LatheCommand::Notaus => {
+                let new_lathe = self.notaus();
+                (
+                    LatheWrapper::Notaus(new_lathe),
+                    LatheResponse::Status { state: "Notaus" },
+                )
+            }
+            _ => (
+                LatheWrapper::Spinning(self),
+                LatheResponse::InvalidTransition {
+                    current_state: "Spinning",
+                    attempted_command: format!("{:?}", cmd),
+                },
+            ),
+        }
+    }
+}
+
+impl StateHandler2<LatheCommand, LatheResponse, LatheWrapper> for Lathe<Feeding> {
+    fn handle_cmd(self, cmd: LatheCommand) -> (LatheWrapper, LatheResponse) {
+        match cmd {
+            LatheCommand::StopFeed => {
+                let new_lathe = self.stop_feed();
+                (
+                    LatheWrapper::Spinning(new_lathe),
+                    LatheResponse::Status { state: "Spinning" },
+                )
+            }
+            LatheCommand::Notaus => {
+                let new_lathe = self.notaus();
+                (
+                    LatheWrapper::Notaus(new_lathe),
+                    LatheResponse::Status { state: "Notaus" },
+                )
+            }
+            _ => (
+                LatheWrapper::Feeding(self),
+                LatheResponse::InvalidTransition {
+                    current_state: "Feeding",
+                    attempted_command: format!("{:?}", cmd),
+                },
+            ),
+        }
+    }
+}
+
+impl StateHandler2<LatheCommand, LatheResponse, LatheWrapper> for Lathe<Notaus> {
+    fn handle_cmd(self, cmd: LatheCommand) -> (LatheWrapper, LatheResponse) {
+        match cmd {
+            LatheCommand::Acknowledge => {
+                let new_lathe = self.acknowledge();
+                (
+                    LatheWrapper::Off(new_lathe),
+                    LatheResponse::Status { state: "Off" },
+                )
+            }
+            _ => (
+                LatheWrapper::Notaus(self),
+                LatheResponse::InvalidTransition {
+                    current_state: "Notaus",
+                    attempted_command: format!("{:?}", cmd),
+                },
+            ),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn setup() -> MachineController2<LatheCommand, LatheResponse, LatheWrapper> {
+        let lathe_data = Box::new(LatheData::default());
+
+        let lathe_wrapper = LatheWrapper::new(lathe_data);
+        MachineController2::<LatheCommand, LatheResponse, LatheWrapper>::new(lathe_wrapper)
+    }
+
+    #[test]
+    fn command_sequence() {
+        let controller = setup();
+
+        controller
+            .send_command(LatheCommand::StartSpinning(800))
+            .unwrap();
+        controller.send_command(LatheCommand::Feed(150)).unwrap();
+
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        let responses = controller.check_responses();
+        assert_eq!(responses.len(), 2);
+        assert_eq!(responses[0], LatheResponse::Status { state: "Spinning" });
+        assert_eq!(responses[1], LatheResponse::Status { state: "Feeding" });
+
+        controller.shutdown().unwrap();
+    }
 
     mod state_transitions {
         use super::*;
