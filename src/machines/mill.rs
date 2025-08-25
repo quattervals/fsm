@@ -36,18 +36,24 @@ pub struct GenericFsmData {
 
 fsm! {
   Off, GenericFsmData,
-    Off: {
-      start_spinning(self, revs: u32) -> Spinning {
-        self.data.revs = revs;
-      },
-      do_stuff(self, bla: u32) -> Notaus,
+  Off: {
+    start_spinning(self, revs: u32) -> Spinning {
+      self.data.revs = revs;
     },
-      Spinning: {
-        stop_spinning(self) -> Off{
-            self.data.revs = 0;
-        },
-
+  },
+  Spinning: {
+    stop_spinning(self) -> Off{
+      self.data.revs = 0;
     },
+    start_feeding(self, feed: u32) -> Feeding {
+      self.data.feed = feed;
+    },
+  },
+  Feeding: {
+    stop_feeding(self) -> Spinning {
+      self.data.feed = 0;
+    },
+  },
 }
 
 #[cfg(test)]
@@ -61,11 +67,44 @@ mod tests {
     }
 
     #[test]
-    fn off_to_spinning_transition() {
+    fn off_to_spinning() {
         let gen_fsm = setup();
 
         let gen_fsm = gen_fsm.start_spinning(12);
 
         assert_eq!(12, gen_fsm.data.revs);
+    }
+
+    #[test]
+    fn spinning_to_feeding() {
+        let gen_fsm = setup();
+        let gen_fsm = gen_fsm.start_spinning(12);
+
+        let gen_fsm = gen_fsm.start_feeding(66);
+
+        assert_eq!(12, gen_fsm.data.revs);
+        assert_eq!(66, gen_fsm.data.feed);
+    }
+
+    #[test]
+    fn spinning_to_off() {
+        let gen_fsm = setup();
+        let gen_fsm = gen_fsm.start_spinning(12);
+
+        let gen_fsm = gen_fsm.stop_spinning();
+
+        assert_eq!(0, gen_fsm.data.revs);
+    }
+
+    #[test]
+    fn feeding_to_spinning() {
+        let gen_fsm = setup();
+        let gen_fsm = gen_fsm.start_spinning(12);
+        let gen_fsm = gen_fsm.start_feeding(66);
+
+        let gen_fsm = gen_fsm.stop_feeding();
+
+        assert_eq!(12, gen_fsm.data.revs);
+        assert_eq!(0, gen_fsm.data.feed);
     }
 }
