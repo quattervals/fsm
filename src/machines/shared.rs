@@ -10,12 +10,6 @@ macro_rules! my_macro {
 
 pub(in crate::machines) use my_macro;
 
-// #[derive(Default, Debug)]
-// pub struct FsmData {
-//     pub revs: u32,
-//     pub feed: u32,
-// }
-
 pub struct FSM<State, FsmData> {
     pub state: PhantomData<State>,
     pub data: Box<FsmData>,
@@ -41,21 +35,17 @@ macro_rules! fsm {
             }
         }
     }
+
+    /// Common functions for every state
+    impl<State, $data> FSM<State, $data>
+    where $data : std::fmt::Debug
+    {
+        pub fn print(&self) {
+            println!("State {:?}, Data {:#?}", self.state, self.data)
+        }
+    }
+
  $(
-    // println!("From State: {}", stringify!($from_state));
-    // $(
-    //     println!("  Method: {} -> {}", stringify!($method), stringify!($to_state));
-    //     // $(
-    //         // print!("    Param: {}: {}", stringify!($param), stringify!($type));
-
-    //     // )*
-    //     print!("\n");
-
-    //     $(
-    //        println!("    body {}", stringify!($($body)*));
-    //     )?
-    // )*
-
 
     impl FSM<$from_state, $data> {
         $(
@@ -68,11 +58,8 @@ macro_rules! fsm {
 
             }
         )*
-
     }
   )*
-
-//   println!("Struct: {}", stringify!($struct));
 };
 }
 

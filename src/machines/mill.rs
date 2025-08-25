@@ -107,4 +107,13 @@ mod tests {
         assert_eq!(12, gen_fsm.data.revs);
         assert_eq!(0, gen_fsm.data.feed);
     }
+
+    #[test]
+    fn print() {
+        let gen_fsm = setup();
+        let gen_fsm = gen_fsm.start_spinning(12);
+        let gen_fsm = gen_fsm.start_feeding(66);
+
+        gen_fsm.print()
+    }
 }
