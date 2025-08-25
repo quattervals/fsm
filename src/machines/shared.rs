@@ -15,9 +15,15 @@ pub struct FSM<State, FsmData> {
     pub data: Box<FsmData>,
 }
 
+
 macro_rules! fsm {
 (
-    $start_state:ident, $data:ident,
+    StartState: $start_state:ident,
+    MachineData: $data:ident,
+    MachineCommand: $command:ident,
+    MachineResponse: $response:ident,
+    StateHandlerTrait: $state_handler:ident,
+    Controller: $controller:ident,
     $(
         $from_state:ident: {
             $(
@@ -46,7 +52,6 @@ macro_rules! fsm {
     }
 
  $(
-
     impl FSM<$from_state, $data> {
         $(
             pub fn $method(mut $self $(, $($param: $type),+)?) -> FSM<$to_state, $data> {
@@ -60,6 +65,49 @@ macro_rules! fsm {
         )*
     }
   )*
+
+  /// Wrapper
+  pub enum FsmWrapper {
+    $(
+        $from_state(FSM<$from_state, $data>),
+    )*
+  }
+
+  impl FsmWrapper{
+    pub fn new(machine_data: Box<$data>) -> Self {
+        FsmWrapper::$start_state(FSM::<$start_state, $data>::new(machine_data))
+    }
+
+    pub fn handle_cmd(self, cmd: $command) -> (FsmWrapper, $response){
+        match self{
+            $(
+                FsmWrapper::$from_state(machine) => machine.handle_cmd(cmd),
+            )*
+        }
+    }
+  }
+
+  impl From<Box<$data>> for FsmWrapper {
+    fn from(lathe_data: Box<$data>) -> Self {
+        FsmWrapper::Off(FSM::<$start_state>::new(lathe_data))
+    }
+  }
+
+  impl $state_handler<$command, $response, FsmWrapper> for FsmWrapper {
+    fn handle_cmd(self, cmd: $command) -> (FsmWrapper, $response) {
+        self.handle_cmd(cmd)
+    }
+  }
+
+  /// Type alias for LatheController using the generic MachineController
+  pub type FsmController = $controller<$command, $response>;
+  impl FsmController {
+  pub fn create(lathe_data: Box<$data>) -> Self {
+      $controller::new::<Box<$data>, FsmWrapper>(lathe_data)
+  }
+}
+
+
 };
 }
 

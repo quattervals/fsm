@@ -1,4 +1,4 @@
-use super::shared::{FSM, fsm};
+use super::shared::{FSM, fsm, StateHandler, MachineController};
 
 use std::marker::PhantomData;
 
@@ -11,31 +11,44 @@ pub struct Feeding;
 #[derive(Debug)]
 pub struct Notaus;
 
-pub fn try_macro() {
-    //     fsm! {
-    //         Off: {
-    //           start_spinning(self, revs: u32) -> Spinning{
-    //             self.data.revs = revs;
-    //           },
-    //           do_stuff(self, bla: u32) -> Notaus,
-    //         },
-    //           Spinning: {
-    //             stop_spinning(self, revs: u32) -> Off{
-    //                 self.data.revs = revs;
-    //             },
-    //             do_otherstuff(self, bla: u32) -> Notaus,
-    //         },
-    //     }
-}
+pub fn try_macro() {}
 
 #[derive(Default, Debug)]
-pub struct GenericFsmData {
+pub struct MillData {
     revs: u32,
     feed: u32,
 }
 
+
+
+#[derive(Debug)]
+pub enum MillCommand {
+    StartSpinning(u32),
+    StopSpinning,
+    Move(i32),
+    StopMoving,
+    Notaus,
+    Acknowledge,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum MillResponse {
+    Status {
+        state: &'static str,
+    },
+    InvalidTransition {
+        current_state: &'static str,
+        attempted_command: String,
+    },
+}
+
 fsm! {
-  Off, GenericFsmData,
+  StartState: Off,
+  MachineData: MillData,
+  MachineCommand: MillCommand,
+  MachineResponse: MillResponse,
+  StateHandlerTrait: StateHandler,
+  Controller: MachineController,
   Off: {
     start_spinning(self, revs: u32) -> Spinning {
       self.data.revs = revs;
@@ -59,61 +72,73 @@ fsm! {
 #[cfg(test)]
 mod tests {
 
+    mod controller_tests {
+        use super::*;
+
+        // fn setup_lathe_controller() -> LatheController {
+        //     let lathe_data = Box::new(LatheData::default());
+        //     LatheController::create(lathe_data)
+        // }
+    }
+
     use super::*;
+    mod state_transitions {
+        use super::*;
 
-    fn setup() -> FSM<Off, GenericFsmData> {
-        let data = Box::new(GenericFsmData::default());
-        FSM::<Off, GenericFsmData>::new(data)
-    }
+        fn setup() -> FSM<Off, MillData> {
+            let data = Box::new(MillData::default());
+            FSM::<Off, MillData>::new(data)
+        }
 
-    #[test]
-    fn off_to_spinning() {
-        let gen_fsm = setup();
+        #[test]
+        fn off_to_spinning() {
+            let gen_fsm = setup();
 
-        let gen_fsm = gen_fsm.start_spinning(12);
+            let gen_fsm = gen_fsm.start_spinning(12);
 
-        assert_eq!(12, gen_fsm.data.revs);
-    }
+            assert_eq!(12, gen_fsm.data.revs);
+        }
 
-    #[test]
-    fn spinning_to_feeding() {
-        let gen_fsm = setup();
-        let gen_fsm = gen_fsm.start_spinning(12);
+        #[test]
+        fn spinning_to_feeding() {
+            let gen_fsm = setup();
+            let gen_fsm = gen_fsm.start_spinning(12);
 
-        let gen_fsm = gen_fsm.start_feeding(66);
+            let gen_fsm = gen_fsm.start_feeding(66);
 
-        assert_eq!(12, gen_fsm.data.revs);
-        assert_eq!(66, gen_fsm.data.feed);
-    }
+            assert_eq!(12, gen_fsm.data.revs);
+            assert_eq!(66, gen_fsm.data.feed);
+        }
 
-    #[test]
-    fn spinning_to_off() {
-        let gen_fsm = setup();
-        let gen_fsm = gen_fsm.start_spinning(12);
+        #[test]
+        fn spinning_to_off() {
+            let gen_fsm = setup();
+            let gen_fsm = gen_fsm.start_spinning(12);
 
-        let gen_fsm = gen_fsm.stop_spinning();
+            let gen_fsm = gen_fsm.stop_spinning();
 
-        assert_eq!(0, gen_fsm.data.revs);
-    }
+            assert_eq!(0, gen_fsm.data.revs);
+        }
 
-    #[test]
-    fn feeding_to_spinning() {
-        let gen_fsm = setup();
-        let gen_fsm = gen_fsm.start_spinning(12);
-        let gen_fsm = gen_fsm.start_feeding(66);
+        #[test]
+        fn feeding_to_spinning() {
+            let gen_fsm = setup();
+            let gen_fsm = gen_fsm.start_spinning(12);
+            let gen_fsm = gen_fsm.start_feeding(66);
 
-        let gen_fsm = gen_fsm.stop_feeding();
+            let gen_fsm = gen_fsm.stop_feeding();
 
-        assert_eq!(12, gen_fsm.data.revs);
-        assert_eq!(0, gen_fsm.data.feed);
-    }
+            assert_eq!(12, gen_fsm.data.revs);
+            assert_eq!(0, gen_fsm.data.feed);
+        }
 
-    #[test]
-    fn print() {
-        let gen_fsm = setup();
-        let gen_fsm = gen_fsm.start_spinning(12);
-        let gen_fsm = gen_fsm.start_feeding(66);
+        #[test]
+        fn print() {
+            let gen_fsm = setup();
+            let gen_fsm = gen_fsm.start_spinning(12);
+            let gen_fsm = gen_fsm.start_feeding(66);
 
-        gen_fsm.print()
+            gen_fsm.print()
+        }
     }
 }
