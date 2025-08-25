@@ -2,78 +2,172 @@ use std::marker::PhantomData;
 use std::sync::mpsc;
 use std::thread::{self, JoinHandle};
 
-/// Trait for state-specific command handling
-pub trait StateHandler<Command, Actor, Response> {
-    fn handle_command(self, cmd: Command) -> (Actor, Response);
+pub struct FSM<State, FsmData> {
+    pub state: PhantomData<State>,
+    pub data: Box<FsmData>,
 }
 
-/// Thread runner for a single machine
-struct MachineThread<Command, Response, Actor>
-where
-    Actor: std::default::Default + StateHandler<Command, Actor, Response>,
-{
-    cmd_rx: mpsc::Receiver<Command>,
-    response_tx: mpsc::Sender<Response>,
-    actor: Actor,
-}
-
-impl<Command, Response, Actor: std::default::Default + StateHandler<Command, Actor, Response>>
-    MachineThread<Command, Response, Actor>
-{
-    fn new(cmd_rx: mpsc::Receiver<Command>, response_tx: mpsc::Sender<Response>) -> Self {
-        Self {
-            cmd_rx,
-            response_tx,
-            actor: Actor::default(),
+macro_rules! fsm {
+(
+    StartState: $start_state:ident,
+    MachineData: $data:ident,
+    MachineCommand: $command_type:ident,
+    MachineResponse: $response:ident,
+    StateHandlerTrait: $state_handler:ident,
+    Controller: $controller:ident,
+    $(
+        $from_state:ident: {
+            $(
+               $command:ident $(($($param:ident: $param_type:ty),+))? => $method:ident($self:ident) -> $to_state:ident
+                $({ $($body:tt)* })?
+            ),*,
+        } ,
+    )*
+) => {
+    impl <$start_state, $data> FSM<$start_state, $data>{
+        pub fn new(data: Box<$data>) -> FSM<$start_state, $data> {
+            FSM{
+                state: PhantomData,
+                data
+            }
         }
     }
 
-    fn run(mut self) {
-        while let Ok(cmd) = self.cmd_rx.recv() {
-            let (new_actor, response) = self.actor.handle_command(cmd);
-            self.actor = new_actor;
-            let _ = self.response_tx.send(response);
+
+    impl<State, $data> FSM<State, $data>
+    where $data : std::fmt::Debug
+    {
+        pub fn print(&self) {
+            println!("State {:?}, Data {:#?}", self.state, self.data)
         }
     }
+
+ $(
+    impl FSM<$from_state, $data> {
+        $(
+            pub fn $method(mut $self $(, $($param: $param_type),+)?) -> FSM<$to_state, $data> {
+                $(
+                    $($body)*
+                )?
+                FSM {
+                   state: PhantomData,
+                   data: $self.data,
+                }
+            }
+        )*
+    }
+  )*
+
+
+  pub enum FsmWrapper {
+    $(
+        $from_state(FSM<$from_state, $data>),
+    )*
+  }
+
+
+  impl FsmWrapper{
+    pub fn new(machine_data: Box<$data>) -> Self {
+        FsmWrapper::$start_state(FSM::<$start_state, $data>::new(machine_data))
+    }
+
+    pub fn handle_cmd(self, cmd: $command_type) -> (FsmWrapper, $response){
+        match self{
+            $(
+                FsmWrapper::$from_state(machine) => machine.handle_cmd(cmd),
+            )*
+        }
+    }
+  }
+
+  impl From<Box<$data>> for FsmWrapper {
+    fn from(lathe_data: Box<$data>) -> Self {
+        FsmWrapper::Off(FSM::<$start_state, $data>::new(lathe_data))
+    }
+  }
+
+  impl $state_handler<$command_type, $response, FsmWrapper> for FsmWrapper {
+    fn handle_cmd(self, cmd: $command_type) -> (FsmWrapper, $response) {
+        self.handle_cmd(cmd)
+    }
+  }
+
+
+  pub type FsmController = $controller<$command_type, $response>;
+  impl FsmController {
+    pub fn create(lathe_data: Box<$data>) -> Self {
+        $controller::new::<Box<$data>, FsmWrapper>(lathe_data)
+    }
+  }
+
+
+  $(
+    impl $state_handler<$command_type, $response, FsmWrapper> for FSM<$from_state, $data>{
+        fn handle_cmd(self, cmd: $command_type) -> (FsmWrapper, $response){
+            match cmd {
+                $(
+                    $command_type::$command$(($($param),+))? => {
+                        let new_fsm = self.$method($($($param),+)?);
+                        (
+                            FsmWrapper::$to_state(new_fsm),
+                            $response::Status {state: stringify!($to_state)},
+                        )
+                    }
+
+                )*
+                _ => (
+                            FsmWrapper::$from_state(self),
+                            $response::InvalidTransition {
+                                current_state: stringify!($from_state),
+                                attempted_command: format!("{:?}", cmd),
+                            }
+                    )
+
+            }
+        }
+    }
+
+  )*
+
+};
+
 }
 
-pub struct MachineController<Command, Response, Actor>
+pub(in crate::machines) use fsm;
+
+pub trait StateHandler<Command, Response, FsmWrapper> {
+    fn handle_cmd(self, cmd: Command) -> (FsmWrapper, Response);
+}
+
+pub struct MachineController<Command, Response>
 where
     Command: Send + 'static,
     Response: Send + 'static,
-    Actor: std::default::Default + StateHandler<Command, Actor, Response> + Send + 'static,
 {
     cmd_tx: mpsc::Sender<Command>,
     response_rx: mpsc::Receiver<Response>,
     thread_handle: JoinHandle<()>,
-    _phantom: PhantomData<Actor>,
 }
 
-impl<Command, Response, Actor> Default for MachineController<Command, Response, Actor>
+impl<Command, Response> MachineController<Command, Response>
 where
     Command: Send + 'static,
     Response: Send + 'static,
-    Actor: std::default::Default + StateHandler<Command, Actor, Response> + Send + 'static,
 {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+    pub fn new<MachineData, FsmWrapper>(machine_data: MachineData) -> Self
+    where
+        FsmWrapper:
+            Send + 'static + StateHandler<Command, Response, FsmWrapper> + From<MachineData>,
+    {
+        let fsm_wrapper = FsmWrapper::from(machine_data);
 
-impl<Command, Response, Actor> MachineController<Command, Response, Actor>
-where
-    Command: Send + 'static,
-    Response: Send + 'static,
-    Actor: std::default::Default + StateHandler<Command, Actor, Response> + Send + 'static,
-{
-    pub fn new() -> Self {
         let (cmd_tx, cmd_rx): (mpsc::Sender<Command>, mpsc::Receiver<Command>) =
             std::sync::mpsc::channel();
         let (response_tx, response_rx): (mpsc::Sender<Response>, mpsc::Receiver<Response>) =
             std::sync::mpsc::channel();
 
-        let machine_thread: MachineThread<Command, Response, Actor> =
-            MachineThread::new(cmd_rx, response_tx);
+        let machine_thread: MachineThread<Command, Response, FsmWrapper> =
+            MachineThread::new(cmd_rx, response_tx, fsm_wrapper);
         let thread_handle = thread::spawn(move || {
             machine_thread.run();
         });
@@ -82,7 +176,6 @@ where
             cmd_tx,
             response_rx,
             thread_handle,
-            _phantom: PhantomData,
         }
     }
 
@@ -105,5 +198,36 @@ where
             .join()
             .map_err(|_| "Thread join failed")?;
         Ok(())
+    }
+}
+
+struct MachineThread<Command, Response, FsmWrapper> {
+    cmd_rx: mpsc::Receiver<Command>,
+    response_tx: mpsc::Sender<Response>,
+    fsm_wrapper: FsmWrapper,
+}
+
+impl<Command, Response, FsmWrapper> MachineThread<Command, Response, FsmWrapper>
+where
+    FsmWrapper: StateHandler<Command, Response, FsmWrapper>,
+{
+    fn new(
+        cmd_rx: mpsc::Receiver<Command>,
+        response_tx: mpsc::Sender<Response>,
+        fsm_wrapper: FsmWrapper,
+    ) -> Self {
+        Self {
+            cmd_rx,
+            response_tx,
+            fsm_wrapper,
+        }
+    }
+
+    fn run(mut self) {
+        while let Ok(cmd) = self.cmd_rx.recv() {
+            let (new_actor, response) = self.fsm_wrapper.handle_cmd(cmd);
+            self.fsm_wrapper = new_actor;
+            let _ = self.response_tx.send(response);
+        }
     }
 }
