@@ -11,8 +11,6 @@ pub struct Moving;
 #[derive(Debug)]
 pub struct Notaus;
 
-pub fn try_macro() {}
-
 #[derive(Default, Debug)]
 pub struct MillData {
     revs: u32,
