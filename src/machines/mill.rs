@@ -44,15 +44,15 @@ fsm! {
   StateHandlerTrait: StateHandler,
   Controller: MachineController,
   Off: {
-    StartSpinning(u32) => start_spinning(self, revs: u32) -> Spinning {
+    StartSpinning(revs: u32) => start_spinning(self) -> Spinning {
       self.data.revs = revs;
     },
   },
   Spinning: {
-    StopSpinning => stop_spinning(self) -> Off{
+    StopSpinning => stop_spinning(self) -> Off {
       self.data.revs = 0;
     },
-    Move(i32) => start_moving(self, linear_move: i32) -> Moving {
+    Move(linear_move: i32) => start_moving(self) -> Moving {
       self.data.linear_move = linear_move;
     },
   },

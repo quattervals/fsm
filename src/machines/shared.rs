@@ -18,7 +18,7 @@ macro_rules! fsm {
     $(
         $from_state:ident: {
             $(
-               $command:ident $(($($cmd_type:ty),*))? => $method:ident($self:ident $(, $($param:ident: $type:ty),*)?) -> $to_state:ident
+               $command:ident $(($($param:ident: $param_type:ty),+))? => $method:ident($self:ident) -> $to_state:ident
                 $({ $($body:tt)* })?
             ),*,
         } ,
@@ -45,13 +45,14 @@ macro_rules! fsm {
  $(
     impl FSM<$from_state, $data> {
         $(
-            pub fn $method(mut $self $(, $($param: $type),+)?) -> FSM<$to_state, $data> {
-                $($($body)*)?
+            pub fn $method(mut $self $(, $($param: $param_type),+)?) -> FSM<$to_state, $data> {
+                $(
+                    $($body)*
+                )?
                 FSM {
                    state: PhantomData,
                    data: $self.data,
                 }
-
             }
         )*
     }
