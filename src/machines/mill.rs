@@ -37,7 +37,7 @@ pub struct GenericFsmData {
 fsm! {
   Off, GenericFsmData,
     Off: {
-      start_spinning(self, revs: u32) -> Spinning{
+      start_spinning(self, revs: u32) -> Spinning {
         self.data.revs = revs;
       },
       do_stuff(self, bla: u32) -> Notaus,

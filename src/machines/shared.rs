@@ -28,7 +28,7 @@ macro_rules! fsm {
         $from_state:ident: {
             $(
                 $method:ident($self:ident $(, $($param:ident: $type:ty),*)?) -> $to_state:ident
-                $({ $($body:stmt)* })?
+                $({ $($body:tt)* })?
             ),*,
         } ,
     )*
