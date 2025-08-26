@@ -184,7 +184,7 @@ mod tests {
 
         fn setup() -> FSM<Off, MillData> {
             let data = Box::new(MillData::default());
-            FSM::<Off, MillData>::new(data)
+            FSM::new(data)
         }
 
         #[test]
