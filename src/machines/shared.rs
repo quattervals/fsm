@@ -1,12 +1,34 @@
+/// Finite State Machine (FSM) implementation
+/// This module provides a generic FSM framework
+///
+/// The FSM is implemented using a type-state pattern where the state is represented by a generic parameter.
+/// This allows for compile-time checking of valid state transitions.
 use std::marker::PhantomData;
 use std::sync::mpsc;
 use std::thread::{self, JoinHandle};
 
+/// Represents a Finite State Machine with a specific state and data.
+///
+/// # Type Parameters
+/// * `State` - The current state of the FSM
+/// * `FsmData` - The data associated with the FSM
 pub struct FSM<State, FsmData> {
     pub state: PhantomData<State>,
     pub data: Box<FsmData>,
 }
 
+/// Macro for defining a Finite State Machine.
+///
+/// This macro generates the necessary implementations for the FSM based on the provided states and transitions.
+///
+/// # Parameters
+/// * `StartState` - The initial state of the FSM
+/// * `MachineData` - The type of data associated with the FSM
+/// * `MachineCommand` - The type of commands that are be sent to the FSM
+/// * `MachineResponse` - The type of responses that are returned by the FSM
+/// * `StateHandlerTrait` - The trait that defines the interface for handling commands
+/// * `Controller` - The type of controller for the FSM
+/// * The rest of the parameters define the states and transitions of the FSM
 macro_rules! fsm {
 (
     StartState: $start_state:ident,
@@ -25,6 +47,13 @@ macro_rules! fsm {
     )*
 ) => {
     impl <$start_state, $data> FSM<$start_state, $data>{
+        /// Creates a new FSM with the given data.
+        ///
+        /// # Arguments
+        /// * `data` - The data to associate with the FSM
+        ///
+        /// # Returns
+        /// A new FSM instance
         pub fn new(data: Box<$data>) -> FSM<$start_state, $data> {
             FSM{
                 state: PhantomData,
@@ -37,6 +66,7 @@ macro_rules! fsm {
     impl<State, $data> FSM<State, $data>
     where $data : std::fmt::Debug
     {
+        /// Prints the current state and data of the FSM.
         pub fn print(&self) {
             println!("State {:?}, Data {:#?}", self.state, self.data)
         }
@@ -45,6 +75,14 @@ macro_rules! fsm {
  $(
     impl FSM<$from_state, $data> {
         $(
+            /// Handles a command and transitions to a new state.
+            ///
+            /// # Arguments
+            /// * `self` - The current FSM instance
+            /// * The parameters for the command, if any
+            ///
+            /// # Returns
+            /// A new FSM instance with the updated state
             pub fn $method(mut $self $(, $($param: $param_type),+)?) -> FSM<$to_state, $data> {
                 $(
                     $($body)*
@@ -59,7 +97,10 @@ macro_rules! fsm {
   )*
 
 
-  pub enum FsmWrapper {
+  /// Wrapper enum for the FSM states.
+  ///
+  /// This enum is used to represent the different states of the FSM in a type-safe way.
+pub enum FsmWrapper {
     $(
         $from_state(FSM<$from_state, $data>),
     )*
@@ -67,10 +108,25 @@ macro_rules! fsm {
 
 
   impl FsmWrapper{
+    /// Creates a new FSM wrapper with the given data.
+    ///
+    /// # Arguments
+    /// * `machine_data` - The data to associate with the FSM
+    ///
+    /// # Returns
+    /// A new FSM wrapper instance
     pub fn new(machine_data: Box<$data>) -> Self {
         FsmWrapper::$start_state(FSM::<$start_state, $data>::new(machine_data))
     }
 
+    /// Handles a command and returns the new state and response.
+    ///
+    /// # Arguments
+    /// * `self` - The current FSM wrapper instance
+    /// * `cmd` - The command to handle
+    ///
+    /// # Returns
+    /// A tuple containing the new FSM wrapper instance and the response
     pub fn handle_cmd(self, cmd: $command_type) -> (FsmWrapper, $response){
         match self{
             $(
@@ -81,20 +137,43 @@ macro_rules! fsm {
   }
 
   impl From<Box<$data>> for FsmWrapper {
+    /// Converts the given data into an FSM wrapper.
+    ///
+    /// # Arguments
+    /// * `lathe_data` - The data to convert
+    ///
+    /// # Returns
+    /// An FSM wrapper instance
     fn from(lathe_data: Box<$data>) -> Self {
         FsmWrapper::Off(FSM::<$start_state, $data>::new(lathe_data))
     }
   }
 
   impl $state_handler<$command_type, $response, FsmWrapper> for FsmWrapper {
+    /// Handles a command and returns the new state and response.
+    ///
+    /// # Arguments
+    /// * `self` - The current FSM wrapper instance
+    /// * `cmd` - The command to handle
+    ///
+    /// # Returns
+    /// A tuple containing the new FSM wrapper instance and the response
     fn handle_cmd(self, cmd: $command_type) -> (FsmWrapper, $response) {
         self.handle_cmd(cmd)
     }
   }
 
 
-  pub type FsmController = $controller<$command_type, $response>;
+  /// Type alias for the FSM controller.
+pub type FsmController = $controller<$command_type, $response>;
   impl FsmController {
+    /// Creates a new FSM controller with the given data.
+    ///
+    /// # Arguments
+    /// * `lathe_data` - The data to associate with the FSM
+    ///
+    /// # Returns
+    /// A new FSM controller instance
     pub fn create(lathe_data: Box<$data>) -> Self {
         $controller::new::<Box<$data>, FsmWrapper>(lathe_data)
     }
@@ -103,6 +182,14 @@ macro_rules! fsm {
 
   $(
     impl $state_handler<$command_type, $response, FsmWrapper> for FSM<$from_state, $data>{
+        /// Handles a command and returns the new state and response.
+        ///
+        /// # Arguments
+        /// * `self` - The current FSM instance
+        /// * `cmd` - The command to handle
+        ///
+        /// # Returns
+        /// A tuple containing the new FSM wrapper instance and the response
         fn handle_cmd(self, cmd: $command_type) -> (FsmWrapper, $response){
             match cmd {
                 $(
@@ -135,10 +222,29 @@ macro_rules! fsm {
 
 pub(in crate::machines) use fsm;
 
+/// Trait for handling commands in the FSM.
+///
+/// # Type Parameters
+/// * `Command` - The type of commands that can be handled
+/// * `Response` - The type of responses that can be returned
+/// * `FsmWrapper` - The type of FSM wrapper
 pub trait StateHandler<Command, Response, FsmWrapper> {
+    /// Handles a command and returns the new state and response.
+    ///
+    /// # Arguments
+    /// * `self` - The current FSM instance
+    /// * `cmd` - The command to handle
+    ///
+    /// # Returns
+    /// A tuple containing the new FSM wrapper instance and the response
     fn handle_cmd(self, cmd: Command) -> (FsmWrapper, Response);
 }
 
+/// Controller for managing an FSM in a separate thread.
+///
+/// # Type Parameters
+/// * `Command` - The type of commands that can be sent to the FSM
+/// * `Response` - The type of responses that can be returned by the FSM
 pub struct MachineController<Command, Response>
 where
     Command: Send + 'static,
@@ -154,6 +260,13 @@ where
     Command: Send + 'static,
     Response: Send + 'static,
 {
+    /// Creates a new FSM controller with the given data.
+    ///
+    /// # Arguments
+    /// * `machine_data` - The data to associate with the FSM
+    ///
+    /// # Returns
+    /// A new FSM controller instance
     pub fn new<MachineData, FsmWrapper>(machine_data: MachineData) -> Self
     where
         FsmWrapper:
@@ -161,13 +274,10 @@ where
     {
         let fsm_wrapper = FsmWrapper::from(machine_data);
 
-        let (cmd_tx, cmd_rx): (mpsc::Sender<Command>, mpsc::Receiver<Command>) =
-            std::sync::mpsc::channel();
-        let (response_tx, response_rx): (mpsc::Sender<Response>, mpsc::Receiver<Response>) =
-            std::sync::mpsc::channel();
+        let (cmd_tx, cmd_rx) = std::sync::mpsc::channel();
+        let (response_tx, response_rx) = std::sync::mpsc::channel();
+        let machine_thread = MachineThread::new(cmd_rx, response_tx, fsm_wrapper);
 
-        let machine_thread: MachineThread<Command, Response, FsmWrapper> =
-            MachineThread::new(cmd_rx, response_tx, fsm_wrapper);
         let thread_handle = thread::spawn(move || {
             machine_thread.run();
         });
@@ -179,10 +289,21 @@ where
         }
     }
 
+    /// Sends a command to the FSM.
+    ///
+    /// # Arguments
+    /// * `cmd` - The command to send
+    ///
+    /// # Returns
+    /// `Ok(())` if the command was sent successfully, `Err` otherwise
     pub fn send_command(&self, cmd: Command) -> Result<(), &'static str> {
         self.cmd_tx.send(cmd).map_err(|_| "Failed to send command")
     }
 
+    /// Checks for any responses from the FSM.
+    ///
+    /// # Returns
+    /// A vector of responses
     pub fn check_responses(&self) -> Vec<Response> {
         let mut responses = Vec::new();
         while let Ok(response) = self.response_rx.try_recv() {
@@ -191,6 +312,10 @@ where
         responses
     }
 
+    /// Shuts down the FSM controller.
+    ///
+    /// # Returns
+    /// `Ok(())` if the controller was shut down successfully, `Err` otherwise
     pub fn shutdown(self) -> Result<(), Box<dyn std::error::Error>> {
         drop(self.cmd_tx);
 
@@ -201,6 +326,12 @@ where
     }
 }
 
+/// Thread for running the FSM.
+///
+/// # Type Parameters
+/// * `Command` - The type of commands that can be sent to the FSM
+/// * `Response` - The type of responses that can be returned by the FSM
+/// * `FsmWrapper` - The type of FSM wrapper
 struct MachineThread<Command, Response, FsmWrapper> {
     cmd_rx: mpsc::Receiver<Command>,
     response_tx: mpsc::Sender<Response>,
@@ -211,6 +342,15 @@ impl<Command, Response, FsmWrapper> MachineThread<Command, Response, FsmWrapper>
 where
     FsmWrapper: StateHandler<Command, Response, FsmWrapper>,
 {
+    /// Creates a new FSM thread.
+    ///
+    /// # Arguments
+    /// * `cmd_rx` - The receiver for commands
+    /// * `response_tx` - The sender for responses
+    /// * `fsm_wrapper` - The FSM wrapper
+    ///
+    /// # Returns
+    /// A new FSM thread instance
     fn new(
         cmd_rx: mpsc::Receiver<Command>,
         response_tx: mpsc::Sender<Response>,
@@ -223,6 +363,7 @@ where
         }
     }
 
+    /// Runs the FSM thread.
     fn run(mut self) {
         while let Ok(cmd) = self.cmd_rx.recv() {
             let (new_actor, response) = self.fsm_wrapper.handle_cmd(cmd);

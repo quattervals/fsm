@@ -1,7 +1,18 @@
+//! Lathe FSM implementation using hand-coded approach
+//!
+//! This module demonstrates a fully manual implementation of the finite state machine pattern
+//! without using the `fsm!` macro. All boilerplate code is written explicitly to show the
+//! underlying mechanics that the macro would otherwise generate automatically.
+//!
+//! Compare this with `mill.rs` which uses the `fsm!` macro to generate equivalent functionality
+//! with significantly less code. This manual approach provides full control and transparency
+//! over the implementation details at the cost of more verbose code.
+
 use std::marker::PhantomData;
 
 use super::shared::{MachineController, StateHandler};
 
+/// Commands that are sent to the lathe FSM
 #[derive(Debug)]
 pub enum LatheCommand {
     StartSpinning(u32),
@@ -12,6 +23,7 @@ pub enum LatheCommand {
     Acknowledge,
 }
 
+/// Responses returned by the lathe FSM
 #[derive(Debug, Clone, PartialEq)]
 pub enum LatheResponse {
     Status {
@@ -23,6 +35,7 @@ pub enum LatheResponse {
     },
 }
 
+/// Lathe states - zero-sized types for compile-time state tracking
 #[derive(Debug)]
 pub struct Off;
 #[derive(Debug)]
@@ -32,87 +45,110 @@ pub struct Feeding;
 #[derive(Debug)]
 pub struct Notaus;
 
+/// Business data for the lathe FSM
 #[derive(Default, Debug)]
 pub struct LatheData {
     revs: u32,
     feed: u32,
 }
 
+/// Main FSM struct using type-state pattern
+///
+/// This is manually implemented to show the structure that the `fsm!` macro
+/// would generate automatically. The generic `State` parameter ensures
+/// compile-time verification of valid state transitions.
+/// The actual data needed for the operation is passed around as a reference to a boxed value.
+/// Therefore, no extra stack or heap allocations are needed.
 #[derive(Debug)]
 pub struct Lathe<State> {
     state: PhantomData<State>,
-    business_data: Box<LatheData>,
+    lathe_data: Box<LatheData>,
 }
 
+/// Generic implementations available for all states
 impl<State> Lathe<State> {
+    /// Creates a new lathe FSM in the Off state
     pub fn new(data: Box<LatheData>) -> Lathe<Off> {
         Lathe {
             state: PhantomData,
-            business_data: data,
+            lathe_data: data,
         }
     }
 
+    /// Emergency stop transition available from any state
     pub fn notaus(self) -> Lathe<Notaus> {
         Lathe {
             state: PhantomData,
-            business_data: self.business_data,
+            lathe_data: self.lathe_data,
         }
     }
 
+    /// Debug helper to print current state and data
     pub fn print(&self) {
-        println!("State {:?}, Data {:#?}", self.state, self.business_data)
+        println!("State {:?}, Data {:#?}", self.state, self.lathe_data)
     }
 }
 
+/// State-specific transitions for Off state
+///
+/// These methods are manually implemented for each state, defining valid transitions.
+/// The `fsm!` macro would generate equivalent methods automatically.
 impl Lathe<Off> {
     pub fn start_spinning(mut self, revs: u32) -> Lathe<Spinning> {
-        self.business_data.revs = revs;
+        self.lathe_data.revs = revs;
         Lathe {
             state: PhantomData,
-            business_data: self.business_data,
+            lathe_data: self.lathe_data,
         }
     }
 }
 
+/// State-specific transitions for Spinning state
 impl Lathe<Spinning> {
     pub fn feed(mut self, feed: u32) -> Lathe<Feeding> {
-        self.business_data.feed = feed;
+        self.lathe_data.feed = feed;
 
         Lathe {
             state: PhantomData,
-            business_data: self.business_data,
+            lathe_data: self.lathe_data,
         }
     }
     pub fn off(mut self) -> Lathe<Off> {
-        self.business_data = Default::default();
+        self.lathe_data = Default::default();
         Lathe {
             state: PhantomData,
-            business_data: self.business_data,
+            lathe_data: self.lathe_data,
         }
     }
 }
 
+/// State-specific transitions for Feeding state
 impl Lathe<Feeding> {
     pub fn stop_feed(mut self) -> Lathe<Spinning> {
-        self.business_data.feed = 0;
+        self.lathe_data.feed = 0;
 
         Lathe {
             state: PhantomData,
-            business_data: self.business_data,
+            lathe_data: self.lathe_data,
         }
     }
 }
 
+/// State-specific transitions for Notaus (emergency stop) state
 impl Lathe<Notaus> {
     pub fn acknowledge(mut self) -> Lathe<Off> {
-        self.business_data = Default::default();
+        self.lathe_data = Default::default();
         Lathe {
             state: PhantomData,
-            business_data: self.business_data,
+            lathe_data: self.lathe_data,
         }
     }
 }
 
+/// Runtime wrapper enum for handling dynamic state switching
+///
+/// This enum is manually implemented to allow runtime state management.
+/// The `fsm!` macro generates equivalent wrapper enums automatically.
 #[derive(Debug)]
 pub enum LatheWrapper {
     Off(Lathe<Off>),
@@ -121,11 +157,13 @@ pub enum LatheWrapper {
     Notaus(Lathe<Notaus>),
 }
 
+/// Wrapper implementation for runtime state management
 impl LatheWrapper {
     pub fn new(lathe_data: Box<LatheData>) -> Self {
         LatheWrapper::Off(Lathe::<Off>::new(lathe_data))
     }
 
+    /// Delegates command handling to the appropriate state-specific handler
     pub fn handle_cmd(self, cmd: LatheCommand) -> (LatheWrapper, LatheResponse) {
         match self {
             LatheWrapper::Off(lathe) => lathe.handle_cmd(cmd),
@@ -156,7 +194,13 @@ impl LatheController {
     }
 }
 
-// State-specific handlers
+/// Manual implementation of state-specific command handlers
+///
+/// Each state must implement the StateHandler trait, defining which commands
+/// are valid and how they transform the state. The `fsm!` macro generates these
+/// implementations automatically based on the declarative state machine definition.
+///
+/// Command handler for Off state
 impl StateHandler<LatheCommand, LatheResponse, LatheWrapper> for Lathe<Off> {
     fn handle_cmd(self, cmd: LatheCommand) -> (LatheWrapper, LatheResponse) {
         match cmd {
@@ -185,6 +229,7 @@ impl StateHandler<LatheCommand, LatheResponse, LatheWrapper> for Lathe<Off> {
     }
 }
 
+/// Command handler for Spinning state
 impl StateHandler<LatheCommand, LatheResponse, LatheWrapper> for Lathe<Spinning> {
     fn handle_cmd(self, cmd: LatheCommand) -> (LatheWrapper, LatheResponse) {
         match cmd {
@@ -220,6 +265,7 @@ impl StateHandler<LatheCommand, LatheResponse, LatheWrapper> for Lathe<Spinning>
     }
 }
 
+/// Command handler for Feeding state
 impl StateHandler<LatheCommand, LatheResponse, LatheWrapper> for Lathe<Feeding> {
     fn handle_cmd(self, cmd: LatheCommand) -> (LatheWrapper, LatheResponse) {
         match cmd {
@@ -248,6 +294,7 @@ impl StateHandler<LatheCommand, LatheResponse, LatheWrapper> for Lathe<Feeding> 
     }
 }
 
+/// Command handler for Notaus (emergency stop) state
 impl StateHandler<LatheCommand, LatheResponse, LatheWrapper> for Lathe<Notaus> {
     fn handle_cmd(self, cmd: LatheCommand) -> (LatheWrapper, LatheResponse) {
         match cmd {
@@ -283,7 +330,7 @@ mod tests {
 
             let spinning_lathe = lathe.start_spinning(1500);
 
-            assert_eq!(spinning_lathe.business_data.revs, 1500);
+            assert_eq!(spinning_lathe.lathe_data.revs, 1500);
         }
 
         #[test]
@@ -293,8 +340,8 @@ mod tests {
 
             let feeding_lathe = lathe.feed(250);
 
-            assert_eq!(feeding_lathe.business_data.feed, 250);
-            assert_eq!(feeding_lathe.business_data.revs, 1000);
+            assert_eq!(feeding_lathe.lathe_data.feed, 250);
+            assert_eq!(feeding_lathe.lathe_data.revs, 1000);
         }
 
         #[test]
@@ -304,8 +351,8 @@ mod tests {
 
             let spinning_lathe = lathe.stop_feed();
 
-            assert_eq!(spinning_lathe.business_data.feed, 0);
-            assert_eq!(spinning_lathe.business_data.revs, 1200);
+            assert_eq!(spinning_lathe.lathe_data.feed, 0);
+            assert_eq!(spinning_lathe.lathe_data.revs, 1200);
         }
 
         #[test]
@@ -316,8 +363,8 @@ mod tests {
             let notaus_lathe = lathe.notaus();
             let off_lathe = notaus_lathe.acknowledge();
 
-            assert_eq!(off_lathe.business_data.revs, 0);
-            assert_eq!(off_lathe.business_data.feed, 0);
+            assert_eq!(off_lathe.lathe_data.revs, 0);
+            assert_eq!(off_lathe.lathe_data.feed, 0);
         }
     }
 
