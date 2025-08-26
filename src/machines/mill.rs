@@ -1,7 +1,18 @@
+//! Mill FSM implementation using the `fsm!` macro
+//!
+//! This module demonstrates how to leverage the `fsm!` macro from `shared.rs` to generate
+//! boilerplate code for finite state machine implementation. The macro automatically creates
+//! state transition methods, wrapper enums, and command handling logic based on the declarative
+//! state machine definition.
+//!
+//! Compare this with `lathe.rs` which implements the same FSM pattern manually to understand
+//! the code generation benefits of the macro approach.
+
 use super::shared::{FSM, MachineController, StateHandler, fsm};
 
 use std::marker::PhantomData;
 
+/// Mill states - these are zero-sized types used for compile-time state tracking
 #[derive(Debug)]
 pub struct Off;
 #[derive(Debug)]
@@ -11,12 +22,14 @@ pub struct Moving;
 #[derive(Debug)]
 pub struct Notaus;
 
+/// Business data for the mill FSM
 #[derive(Default, Debug)]
 pub struct MillData {
     revs: u32,
     linear_move: i32,
 }
 
+/// Commands that can be sent to the mill FSM
 #[derive(Debug)]
 pub enum MillCommand {
     StartSpinning(u32),
@@ -25,6 +38,7 @@ pub enum MillCommand {
     StopMoving,
 }
 
+/// Responses returned by the mill FSM
 #[derive(Debug, Clone, PartialEq)]
 pub enum MillResponse {
     Status {
@@ -36,6 +50,18 @@ pub enum MillResponse {
     },
 }
 
+// FSM definition using the `fsm!` macro
+//
+// This macro call generates all the boilerplate code that would otherwise need to be
+// written manually.
+// It creates:
+// - State transition methods for each FSM struct
+// - A wrapper enum to handle runtime state switching
+// - Command handling implementations for each state
+// - Controller type alias and factory method
+//
+// The declarative syntax makes the state machine structure clear and reduces
+// the chance of implementation errors compared to manual coding.
 fsm! {
   StartState: Off,
   MachineData: MillData,
@@ -158,7 +184,7 @@ mod tests {
 
         fn setup() -> FSM<Off, MillData> {
             let data = Box::new(MillData::default());
-            FSM::<Off, MillData>::new(data)
+            FSM::new(data)
         }
 
         #[test]
