@@ -40,20 +40,12 @@ macro_rules! fsm {
     $(
         $from_state:ident: {
             $(
-               $command:ident $(($($param:ident: $param_type:ty),+))? => $method:ident($self:ident) -> $to_state:ident
-                $({ $($body:tt)* })?
+               $command:ident $(($($param:ident: $param_type:ty),+))? => $handler_fn:ident => $to_state:ident
             ),*,
         } ,
     )*
 ) => {
     impl <$start_state, $data> FSM<$start_state, $data>{
-        /// Creates a new FSM with the given data.
-        ///
-        /// # Arguments
-        /// * `data` - The data to associate with the FSM
-        ///
-        /// # Returns
-        /// A new FSM instance
         pub fn new(data: Box<$data>) -> FSM<$start_state, $data> {
             FSM{
                 state: PhantomData,
@@ -62,161 +54,93 @@ macro_rules! fsm {
         }
     }
 
-
     impl<State, $data> FSM<State, $data>
     where $data : std::fmt::Debug
     {
-        /// Prints the current state and data of the FSM.
         pub fn print(&self) {
             println!("State {:?}, Data {:#?}", self.state, self.data)
         }
     }
 
- $(
-    impl FSM<$from_state, $data> {
-        $(
-            /// Handles a command and transitions to a new state.
-            ///
-            /// # Arguments
-            /// * `self` - The current FSM instance
-            /// * The parameters for the command, if any
-            ///
-            /// # Returns
-            /// A new FSM instance with the updated state
-            pub fn $method(mut $self $(, $($param: $param_type),+)?) -> FSM<$to_state, $data> {
-                $(
-                    $($body)*
-                )?
-                FSM {
-                   state: PhantomData,
-                   data: $self.data,
-                }
-            }
-        )*
-    }
-  )*
-
-
-  /// Wrapper enum for the FSM states.
-  ///
-  /// This enum is used to represent the different states of the FSM in a type-safe way.
-pub enum FsmWrapper {
     $(
-        $from_state(FSM<$from_state, $data>),
-    )*
-  }
-
-
-  impl FsmWrapper{
-    /// Creates a new FSM wrapper with the given data.
-    ///
-    /// # Arguments
-    /// * `machine_data` - The data to associate with the FSM
-    ///
-    /// # Returns
-    /// A new FSM wrapper instance
-    pub fn new(machine_data: Box<$data>) -> Self {
-        FsmWrapper::$start_state(FSM::<$start_state, $data>::new(machine_data))
-    }
-
-    /// Handles a command and returns the new state and response.
-    ///
-    /// # Arguments
-    /// * `self` - The current FSM wrapper instance
-    /// * `cmd` - The command to handle
-    ///
-    /// # Returns
-    /// A tuple containing the new FSM wrapper instance and the response
-    pub fn handle_cmd(self, cmd: $command_type) -> (FsmWrapper, $response){
-        match self{
+        impl FSM<$from_state, $data> {
             $(
-                FsmWrapper::$from_state(machine) => machine.handle_cmd(cmd),
+                pub fn $handler_fn(mut self $(, $($param: $param_type),+)?) -> FSM<$to_state, $data> {
+                    $handler_fn(&mut self $(, $($param),+)?);
+                    FSM {
+                        state: PhantomData,
+                        data: self.data,
+                    }
+                }
             )*
         }
+    )*
+
+    pub enum FsmWrapper {
+        $(
+            $from_state(FSM<$from_state, $data>),
+        )*
     }
-  }
 
-  impl From<Box<$data>> for FsmWrapper {
-    /// Converts the given data into an FSM wrapper.
-    ///
-    /// # Arguments
-    /// * `lathe_data` - The data to convert
-    ///
-    /// # Returns
-    /// An FSM wrapper instance
-    fn from(lathe_data: Box<$data>) -> Self {
-        FsmWrapper::Off(FSM::<$start_state, $data>::new(lathe_data))
-    }
-  }
+    impl FsmWrapper {
+        pub fn new(machine_data: Box<$data>) -> Self {
+            FsmWrapper::$start_state(FSM::<$start_state, $data>::new(machine_data))
+        }
 
-  impl $state_handler<$command_type, $response, FsmWrapper> for FsmWrapper {
-    /// Handles a command and returns the new state and response.
-    ///
-    /// # Arguments
-    /// * `self` - The current FSM wrapper instance
-    /// * `cmd` - The command to handle
-    ///
-    /// # Returns
-    /// A tuple containing the new FSM wrapper instance and the response
-    fn handle_cmd(self, cmd: $command_type) -> (FsmWrapper, $response) {
-        self.handle_cmd(cmd)
-    }
-  }
-
-
-  /// Type alias for the FSM controller.
-pub type FsmController = $controller<$command_type, $response>;
-  impl FsmController {
-    /// Creates a new FSM controller with the given data.
-    ///
-    /// # Arguments
-    /// * `lathe_data` - The data to associate with the FSM
-    ///
-    /// # Returns
-    /// A new FSM controller instance
-    pub fn create(lathe_data: Box<$data>) -> Self {
-        $controller::new::<Box<$data>, FsmWrapper>(lathe_data)
-    }
-  }
-
-
-  $(
-    impl $state_handler<$command_type, $response, FsmWrapper> for FSM<$from_state, $data>{
-        /// Handles a command and returns the new state and response.
-        ///
-        /// # Arguments
-        /// * `self` - The current FSM instance
-        /// * `cmd` - The command to handle
-        ///
-        /// # Returns
-        /// A tuple containing the new FSM wrapper instance and the response
-        fn handle_cmd(self, cmd: $command_type) -> (FsmWrapper, $response){
-            match cmd {
+        pub fn handle_cmd(self, cmd: $command_type) -> (FsmWrapper, $response){
+            match self {
                 $(
-                    $command_type::$command$(($($param),+))? => {
-                        let new_fsm = self.$method($($($param),+)?);
-                        (
-                            FsmWrapper::$to_state(new_fsm),
-                            $response::Status {state: stringify!($to_state)},
-                        )
-                    }
-
+                    FsmWrapper::$from_state(machine) => machine.handle_cmd(cmd),
                 )*
-                _ => (
-                            FsmWrapper::$from_state(self),
-                            $response::InvalidTransition {
-                                current_state: stringify!($from_state),
-                                attempted_command: format!("{:?}", cmd),
-                            }
-                    )
-
             }
         }
     }
 
-  )*
+    impl From<Box<$data>> for FsmWrapper {
+        fn from(lathe_data: Box<$data>) -> Self {
+            FsmWrapper::Off(FSM::<$start_state, $data>::new(lathe_data))
+        }
+    }
 
-};
+    impl $state_handler<$command_type, $response, FsmWrapper> for FsmWrapper {
+        fn handle_cmd(self, cmd: $command_type) -> (FsmWrapper, $response) {
+            self.handle_cmd(cmd)
+        }
+    }
+
+    pub type FsmController = $controller<$command_type, $response>;
+    impl FsmController {
+        pub fn create(lathe_data: Box<$data>) -> Self {
+            $controller::new::<Box<$data>, FsmWrapper>(lathe_data)
+        }
+    }
+
+    $(
+        impl $state_handler<$command_type, $response, FsmWrapper> for FSM<$from_state, $data>{
+            fn handle_cmd(self, cmd: $command_type) -> (FsmWrapper, $response){
+                match cmd {
+                    $(
+                        $command_type::$command$(($($param),+))? => {
+                            let new_fsm = self.$handler_fn($($($param),+)?);
+                            (
+                                FsmWrapper::$to_state(new_fsm),
+                                $response::Status {state: stringify!($to_state)},
+                            )
+                        }
+                    )*
+                    _ => (
+                        FsmWrapper::$from_state(self),
+                        $response::InvalidTransition {
+                            current_state: stringify!($from_state),
+                            attempted_command: format!("{:?}", cmd),
+                        }
+                    )
+                }
+            }
+        }
+    )*
+}
+
 
 }
 

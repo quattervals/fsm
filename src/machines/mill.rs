@@ -50,6 +50,22 @@ pub enum MillResponse {
     },
 }
 
+/// Functions handling the state transitions
+/// These functions work *only* on the associated MillData
+/// The actual new state is handled by the macro
+fn start_spinning(mill: &mut FSM<Off, MillData>, revs: u32) {
+    mill.data.revs = revs;
+}
+fn stop_spinning(mill: &mut FSM<Spinning, MillData>) {
+    mill.data.revs = 0;
+}
+fn start_moving(mill: &mut FSM<Spinning, MillData>, linear_move: i32) {
+    mill.data.linear_move = linear_move;
+}
+fn stop_moving(mill: &mut FSM<Moving, MillData>) {
+    mill.data.linear_move = 0;
+}
+
 // FSM definition using the `fsm!` macro
 //
 // This macro call generates all the boilerplate code that would otherwise need to be
@@ -63,30 +79,22 @@ pub enum MillResponse {
 // The declarative syntax makes the state machine structure clear and reduces
 // the chance of implementation errors compared to manual coding.
 fsm! {
-  StartState: Off,
-  MachineData: MillData,
-  MachineCommand: MillCommand,
-  MachineResponse: MillResponse,
-  StateHandlerTrait: StateHandler,
-  Controller: MachineController,
-  Off: {
-    StartSpinning(revs: u32) => start_spinning(self) -> Spinning {
-      self.data.revs = revs;
+    StartState: Off,
+    MachineData: MillData,
+    MachineCommand: MillCommand,
+    MachineResponse: MillResponse,
+    StateHandlerTrait: StateHandler,
+    Controller: MachineController,
+    Off: {
+        StartSpinning(revs: u32) => start_spinning => Spinning,
     },
-  },
-  Spinning: {
-    StopSpinning => stop_spinning(self) -> Off {
-      self.data.revs = 0;
+    Spinning: {
+        StopSpinning => stop_spinning => Off,
+        Move(linear_move: i32) => start_moving => Moving,
     },
-    Move(linear_move: i32) => start_moving(self) -> Moving {
-      self.data.linear_move = linear_move;
+    Moving: {
+        StopMoving => stop_moving => Spinning,
     },
-  },
-  Moving: {
-    StopMoving => stop_moving(self) -> Spinning {
-      self.data.linear_move = 0;
-    },
-  },
 }
 
 #[cfg(test)]
