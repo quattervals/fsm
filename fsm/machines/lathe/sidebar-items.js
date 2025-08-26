@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["LatheCommand","LatheResponse","LatheWrapper"],"struct":["Feeding","Lathe","LatheData","Notaus","Off","Spinning"],"type":["LatheController"]};
