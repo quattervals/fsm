@@ -1,5 +1,5 @@
-use fsm::machines::lathe::{LatheCommand, LatheController, LatheData};
-use fsm::machines::mill::{FsmController, MillCommand, MillData};
+use fsm::machines::lathe::{LatheCommand, LatheController};
+use fsm::machines::mill::{FsmController, MillCommand};
 
 use std::thread;
 use std::time::Duration;
@@ -13,8 +13,7 @@ fn main() {
 fn run_lathe() {
     println!("=== Threaded Lathe Demo ===\n");
 
-    let lathe_data = LatheData::default();
-    let controller = LatheController::create(Box::new(lathe_data));
+    let controller = LatheController::create(Box::default());
 
     println!("Sending StartSpinning(1000) command...");
     controller
@@ -87,8 +86,7 @@ fn run_lathe() {
 fn run_mill() {
     println!("=== Threaded Mill Demo ===\n");
 
-    let mill_data = MillData::default();
-    let controller = FsmController::create(Box::new(mill_data));
+    let controller = FsmController::create(Box::default());
 
     println!("Sending StartSpinning(1000) command...");
     controller
