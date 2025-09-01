@@ -1,12 +1,7 @@
 //! Lathe FSM implementation using hand-coded approach
 //!
 //! This module demonstrates a fully manual implementation of the finite state machine pattern
-//! without using the `fsm!` macro. All boilerplate code is written explicitly to show the
-//! underlying mechanics that the macro would otherwise generate automatically.
-//!
-//! Compare this with `mill.rs` which uses the `fsm!` macro to generate equivalent functionality
-//! with significantly less code. This manual approach provides full control and transparency
-//! over the implementation details at the cost of more verbose code.
+//! All boilerplate code is written explicitly to show the underlying mechanics
 
 use std::marker::PhantomData;
 
@@ -54,9 +49,8 @@ pub struct LatheData {
 
 /// Main FSM struct using type-state pattern
 ///
-/// This is manually implemented to show the structure that the `fsm!` macro
-/// would generate automatically. The generic `State` parameter ensures
-/// compile-time verification of valid state transitions.
+/// This is manually implemented.
+/// The generic `State` parameter ensures compile-time verification of valid state transitions.
 /// The actual data needed for the operation is passed around as a reference to a boxed value.
 /// Therefore, no extra stack or heap allocations are needed.
 #[derive(Debug)]
@@ -90,9 +84,6 @@ impl<State> Lathe<State> {
 }
 
 /// State-specific transitions for Off state
-///
-/// These methods are manually implemented for each state, defining valid transitions.
-/// The `fsm!` macro would generate equivalent methods automatically.
 impl Lathe<Off> {
     pub fn start_spinning(mut self, revs: u32) -> Lathe<Spinning> {
         self.lathe_data.revs = revs;
@@ -146,9 +137,6 @@ impl Lathe<Notaus> {
 }
 
 /// Runtime wrapper enum for handling dynamic state switching
-///
-/// This enum is manually implemented to allow runtime state management.
-/// The `fsm!` macro generates equivalent wrapper enums automatically.
 #[derive(Debug)]
 pub enum LatheWrapper {
     Off(Lathe<Off>),
@@ -197,9 +185,7 @@ impl LatheController {
 /// Manual implementation of state-specific command handlers
 ///
 /// Each state must implement the StateHandler trait, defining which commands
-/// are valid and how they transform the state. The `fsm!` macro generates these
-/// implementations automatically based on the declarative state machine definition.
-///
+/// are valid and how they transform the state. 
 /// Command handler for Off state
 impl StateHandler<LatheCommand, LatheResponse, LatheWrapper> for Lathe<Off> {
     fn handle_cmd(self, cmd: LatheCommand) -> (LatheWrapper, LatheResponse) {

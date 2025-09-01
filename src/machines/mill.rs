@@ -4,9 +4,6 @@
 //! boilerplate code for finite state machine implementation. The macro automatically creates
 //! state transition methods, wrapper enums, and command handling logic based on the declarative
 //! state machine definition.
-//!
-//! Compare this with `lathe.rs` which implements the same FSM pattern manually to understand
-//! the code generation benefits of the macro approach.
 
 use super::shared::{FSM, MachineController, StateHandler, fsm};
 

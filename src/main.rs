@@ -53,7 +53,7 @@ fn run_lathe() {
         println!("Response: {:?}", response);
     }
 
-    println!("\nSending truly invalid command (Feed while Off)...");
+    println!("\nSending invalid command (Feed while Off)...");
     controller.send_command(LatheCommand::Feed(300)).unwrap();
 
     thread::sleep(Duration::from_millis(10));
@@ -126,7 +126,7 @@ fn run_mill() {
         println!("Response: {:?}", response);
     }
 
-    println!("\nSending truly invalid command (Feed while Off)...");
+    println!("\nSending invalid command (Feed while Off)...");
     controller.send_command(MillCommand::Move(300)).unwrap();
 
     thread::sleep(Duration::from_millis(10));

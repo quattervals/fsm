@@ -97,8 +97,8 @@ macro_rules! fsm {
     }
 
     impl From<Box<$data>> for FsmWrapper {
-        fn from(lathe_data: Box<$data>) -> Self {
-            FsmWrapper::Off(FSM::<$start_state, $data>::new(lathe_data))
+        fn from(data: Box<$data>) -> Self {
+            FsmWrapper::Off(FSM::<$start_state, $data>::new(data))
         }
     }
 
@@ -110,8 +110,8 @@ macro_rules! fsm {
 
     pub type FsmController = $controller<$command_type, $response>;
     impl FsmController {
-        pub fn create(lathe_data: Box<$data>) -> Self {
-            $controller::new::<Box<$data>, FsmWrapper>(lathe_data)
+        pub fn create(data: Box<$data>) -> Self {
+            $controller::new::<Box<$data>, FsmWrapper>(data)
         }
     }
 
