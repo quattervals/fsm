@@ -97,8 +97,8 @@
 <a href=#97 id=97 data-nosnippet>97</a>    }
 <a href=#98 id=98 data-nosnippet>98</a>
 <a href=#99 id=99 data-nosnippet>99</a>    <span class="kw">impl </span>From&lt;Box&lt;<span class="macro-nonterminal">$data</span>&gt;&gt; <span class="kw">for </span>FsmWrapper {
-<a href=#100 id=100 data-nosnippet>100</a>        <span class="kw">fn </span>from(lathe_data: Box&lt;<span class="macro-nonterminal">$data</span>&gt;) -&gt; <span class="self">Self </span>{
-<a href=#101 id=101 data-nosnippet>101</a>            FsmWrapper::Off(FSM::&lt;<span class="macro-nonterminal">$start_state</span>, <span class="macro-nonterminal">$data</span>&gt;::new(lathe_data))
+<a href=#100 id=100 data-nosnippet>100</a>        <span class="kw">fn </span>from(data: Box&lt;<span class="macro-nonterminal">$data</span>&gt;) -&gt; <span class="self">Self </span>{
+<a href=#101 id=101 data-nosnippet>101</a>            FsmWrapper::Off(FSM::&lt;<span class="macro-nonterminal">$start_state</span>, <span class="macro-nonterminal">$data</span>&gt;::new(data))
 <a href=#102 id=102 data-nosnippet>102</a>        }
 <a href=#103 id=103 data-nosnippet>103</a>    }
 <a href=#104 id=104 data-nosnippet>104</a>
@@ -110,8 +110,8 @@
 <a href=#110 id=110 data-nosnippet>110</a>
 <a href=#111 id=111 data-nosnippet>111</a>    <span class="kw">pub type </span>FsmController = <span class="macro-nonterminal">$controller</span>&lt;<span class="macro-nonterminal">$command_type</span>, <span class="macro-nonterminal">$response</span>&gt;;
 <a href=#112 id=112 data-nosnippet>112</a>    <span class="kw">impl </span>FsmController {
-<a href=#113 id=113 data-nosnippet>113</a>        <span class="kw">pub fn </span>create(lathe_data: Box&lt;<span class="macro-nonterminal">$data</span>&gt;) -&gt; <span class="self">Self </span>{
-<a href=#114 id=114 data-nosnippet>114</a>            <span class="macro-nonterminal">$controller::new</span>::&lt;Box&lt;<span class="macro-nonterminal">$data</span>&gt;, FsmWrapper&gt;(lathe_data)
+<a href=#113 id=113 data-nosnippet>113</a>        <span class="kw">pub fn </span>create(data: Box&lt;<span class="macro-nonterminal">$data</span>&gt;) -&gt; <span class="self">Self </span>{
+<a href=#114 id=114 data-nosnippet>114</a>            <span class="macro-nonterminal">$controller::new</span>::&lt;Box&lt;<span class="macro-nonterminal">$data</span>&gt;, FsmWrapper&gt;(data)
 <a href=#115 id=115 data-nosnippet>115</a>        }
 <a href=#116 id=116 data-nosnippet>116</a>    }
 <a href=#117 id=117 data-nosnippet>117</a>
