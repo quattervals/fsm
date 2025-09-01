@@ -185,7 +185,7 @@ impl LatheController {
 /// Manual implementation of state-specific command handlers
 ///
 /// Each state must implement the StateHandler trait, defining which commands
-/// are valid and how they transform the state. 
+/// are valid and how they transform the state.
 /// Command handler for Off state
 impl StateHandler<LatheCommand, LatheResponse, LatheWrapper> for Lathe<Off> {
     fn handle_cmd(self, cmd: LatheCommand) -> (LatheWrapper, LatheResponse) {
@@ -376,8 +376,6 @@ mod tests {
             assert_eq!(responses.len(), 2);
             assert_eq!(responses[0], LatheResponse::Status { state: "Spinning" });
             assert_eq!(responses[1], LatheResponse::Status { state: "Feeding" });
-
-            controller.shutdown().unwrap();
         }
 
         #[test]
@@ -396,8 +394,6 @@ mod tests {
             assert_eq!(responses[0], LatheResponse::Status { state: "Spinning" });
             assert_eq!(responses[1], LatheResponse::Status { state: "Feeding" });
             assert_eq!(responses[2], LatheResponse::Status { state: "Notaus" });
-
-            controller.shutdown().unwrap();
         }
 
         #[test]
@@ -416,7 +412,6 @@ mod tests {
                     attempted_command: String::from("Feed(200)")
                 }
             );
-            controller.shutdown().unwrap();
         }
     }
 }

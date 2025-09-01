@@ -31,12 +31,10 @@
                 "args": [
                     "test",
                     "--no-run",
-                    "--bin=fsm",
                     "--package=fsm"
                 ],
                 "filter": {
-                    "name": "fsm",
-                    "kind": "bin"
+                    "kind": "lib"
                 }
             },
             "args": [],

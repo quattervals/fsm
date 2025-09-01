@@ -104,9 +104,6 @@ mod tests {
             let lathe_data = Box::new(MillData::default());
             FsmController::create(lathe_data)
         }
-        fn teardown_mill_controller(controller: FsmController) {
-            controller.shutdown().unwrap();
-        }
 
         #[test]
         fn off_to_spinning_transition() {
@@ -120,8 +117,6 @@ mod tests {
             let responses = mill_controller.check_responses();
             assert_eq!(responses.len(), 1);
             assert_eq!(responses[0], MillResponse::Status { state: "Spinning" });
-
-            teardown_mill_controller(mill_controller);
         }
 
         #[test]
@@ -148,8 +143,6 @@ mod tests {
             assert_eq!(responses[1], MillResponse::Status { state: "Moving" });
             assert_eq!(responses[2], MillResponse::Status { state: "Spinning" });
             assert_eq!(responses[3], MillResponse::Status { state: "Off" });
-
-            teardown_mill_controller(mill_controller);
         }
 
         #[test]
@@ -178,8 +171,6 @@ mod tests {
                     attempted_command: String::from("StopSpinning"),
                 }
             );
-
-            teardown_mill_controller(mill_controller);
         }
     }
 

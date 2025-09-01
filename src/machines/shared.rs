@@ -176,7 +176,9 @@ where
 {
     cmd_tx: mpsc::Sender<Command>,
     response_rx: mpsc::Receiver<Response>,
+    #[allow(dead_code)] // allow the join handle for dev purposes. It might be needed later
     thread_handle: JoinHandle<()>,
+    shutdown_tx: mpsc::Sender<()>,
 }
 
 impl<Command, Response> MachineController<Command, Response>
@@ -201,15 +203,17 @@ where
         let (cmd_tx, cmd_rx) = std::sync::mpsc::channel();
         let (response_tx, response_rx) = std::sync::mpsc::channel();
         let machine_thread = MachineThread::new(cmd_rx, response_tx, fsm_wrapper);
+        let (shutdown_tx, shutdown_rx) = std::sync::mpsc::channel();
 
         let thread_handle = thread::spawn(move || {
-            machine_thread.run();
+            machine_thread.run(shutdown_rx);
         });
 
         Self {
             cmd_tx,
             response_rx,
             thread_handle,
+            shutdown_tx,
         }
     }
 
@@ -235,18 +239,15 @@ where
         }
         responses
     }
+}
 
-    /// Shuts down the FSM controller.
-    ///
-    /// # Returns
-    /// `Ok(())` if the controller was shut down successfully, `Err` otherwise
-    pub fn shutdown(self) -> Result<(), Box<dyn std::error::Error>> {
-        drop(self.cmd_tx);
-
-        self.thread_handle
-            .join()
-            .map_err(|_| "Thread join failed")?;
-        Ok(())
+impl<Command, Response> Drop for MachineController<Command, Response>
+where
+    Command: Send + 'static,
+    Response: Send + 'static,
+{
+    fn drop(&mut self) {
+        let _ = self.shutdown_tx.send(());
     }
 }
 
@@ -287,12 +288,19 @@ where
         }
     }
 
-    /// Runs the FSM thread.
-    fn run(mut self) {
-        while let Ok(cmd) = self.cmd_rx.recv() {
-            let (new_actor, response) = self.fsm_wrapper.handle_cmd(cmd);
-            self.fsm_wrapper = new_actor;
-            let _ = self.response_tx.send(response);
+    /// Runs the FSM thread with shutdown capability.
+    fn run(mut self, shutdown_rx: mpsc::Receiver<()>) {
+        loop {
+            if shutdown_rx.try_recv().is_ok() {
+                println!("shutdown fsm");
+                break;
+            }
+
+            while let Ok(cmd) = self.cmd_rx.recv() {
+                let (new_actor, response) = self.fsm_wrapper.handle_cmd(cmd);
+                self.fsm_wrapper = new_actor;
+                let _ = self.response_tx.send(response);
+            }
         }
     }
 }
