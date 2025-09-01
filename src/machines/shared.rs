@@ -98,7 +98,7 @@ macro_rules! fsm {
 
     impl From<Box<$data>> for FsmWrapper {
         fn from(data: Box<$data>) -> Self {
-            FsmWrapper::Off(FSM::<$start_state, $data>::new(data))
+            FsmWrapper::$start_state(FSM::<$start_state, $data>::new(data))
         }
     }
 
@@ -220,8 +220,8 @@ where
     ///
     /// # Returns
     /// `Ok(())` if the command was sent successfully, `Err` otherwise
-    pub fn send_command(&self, cmd: Command) -> Result<(), &'static str> {
-        self.cmd_tx.send(cmd).map_err(|_| "Failed to send command")
+    pub fn send_command(&self, cmd: Command) -> Result<(), mpsc::SendError<Command>> {
+        self.cmd_tx.send(cmd)
     }
 
     /// Checks for any responses from the FSM.
