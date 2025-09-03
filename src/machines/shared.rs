@@ -6,6 +6,7 @@
 use std::marker::PhantomData;
 use std::sync::mpsc;
 use std::thread::{self, JoinHandle};
+use std::time::Duration;
 
 /// Represents a Finite State Machine with a specific state and data.
 ///
@@ -288,19 +289,49 @@ where
         }
     }
 
-    /// Runs the FSM thread with shutdown capability.
+    /// Runs the FSM thread
+    ///
+    /// - Terminates on reception of shutdown signal
+    /// - Channel disconnection
+    /// - Graceful shutdown when no more commands are expected
     fn run(mut self, shutdown_rx: mpsc::Receiver<()>) {
+        let timeout = Duration::from_millis(100);
+
         loop {
-            if shutdown_rx.try_recv().is_ok() {
-                println!("shutdown fsm");
-                break;
+            match shutdown_rx.try_recv() {
+                Ok(()) => {
+                    println!("FSM shutdown requested - terminating");
+                    break;
+                }
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    println!("FSM controller disconnected - terminating");
+                    break;
+                }
+                Err(mpsc::TryRecvError::Empty) => {
+                    // No shutdown signal, continue processing
+                }
             }
 
-            while let Ok(cmd) = self.cmd_rx.recv() {
-                let (new_actor, response) = self.fsm_wrapper.handle_cmd(cmd);
-                self.fsm_wrapper = new_actor;
-                let _ = self.response_tx.send(response);
+            match self.cmd_rx.recv_timeout(timeout) {
+                Ok(cmd) => {
+                    let (new_actor, response) = self.fsm_wrapper.handle_cmd(cmd);
+                    self.fsm_wrapper = new_actor;
+
+                    if self.response_tx.send(response).is_err() {
+                        println!("FSM response receiver disconnected - terminating");
+                        break;
+                    }
+                }
+                Err(mpsc::RecvTimeoutError::Timeout) => {
+                    continue;
+                }
+                Err(mpsc::RecvTimeoutError::Disconnected) => {
+                    println!("FSM command sender disconnected - terminating");
+                    break;
+                }
             }
         }
+
+        println!("FSM thread terminated");
     }
 }
