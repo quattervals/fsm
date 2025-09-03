@@ -1,7 +1,5 @@
----
-{}
----
+# Rules for AI assistant
 
-Always read and follow .clinerules and CLAUDE.md
-
-Don't create new files, rather edit the existing files
+- Read, understand and respect what the files in the `assistants` folder state
+  - Start with `assistants/AGENT.md`
+- Read, understand and respect .clineignore
