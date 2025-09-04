@@ -7,3 +7,4 @@ description = "Distributet FSM implementations"
 license = "MIT"
 
 [dependencies]
+rust-fsm = "0.8.0"
