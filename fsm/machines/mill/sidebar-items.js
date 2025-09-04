@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["FsmWrapper","MillCommand","MillResponse"],"struct":["MillData","Moving","Notaus","Off","Spinning"],"type":["FsmController"]};
+window.SIDEBAR_ITEMS = {"enum":["MillCommand","MillResponse"],"struct":["MillData","MillFsm"],"type":["FsmController"]};
