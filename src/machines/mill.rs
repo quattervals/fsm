@@ -1,16 +1,22 @@
 //! Mill FSM implementation using the `rust-fsm` crate
 //!
-//! This module demonstrates how to use the `rust-fsm` crate to implement
-//! a finite state machine for a mill. The rust-fsm crate provides a DSL
-//! for defining state machines with readable specifications.
+//! This module demonstrates how to leverage the `rust-fsm` crate along with
+//! the existing FSM framework from `shared.rs` to implement a mill state machine.
+//! It provides better type safety than manual state matching through rust-fsm's
+//! generated state machine and integrates with the generic controller architecture.
 
+use super::shared::{MachineController, StateHandler};
 use rust_fsm::*;
-use std::sync::mpsc;
-use std::thread::{self, JoinHandle};
-use std::time::Duration;
+
+/// Business data for the mill FSM
+#[derive(Default, Debug)]
+pub struct MillData {
+    revs: u32,
+    linear_move: i32,
+}
 
 /// Commands that can be sent to the mill FSM
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum MillCommand {
     StartSpinning(u32),
     StopSpinning,
@@ -22,15 +28,16 @@ pub enum MillCommand {
 #[derive(Debug, Clone, PartialEq)]
 pub enum MillResponse {
     Status {
-        state: &'static str,
+        state: String,
     },
     InvalidTransition {
-        current_state: &'static str,
+        current_state: String,
         attempted_command: String,
     },
 }
 
 // Define the state machine using the rust-fsm DSL
+// This provides compile-time guarantees about valid transitions
 state_machine! {
     #[derive(Debug)]
     /// Mill state machine with states and transitions
@@ -46,190 +53,90 @@ state_machine! {
     }
 }
 
-/// Business data for the mill FSM
-#[derive(Default, Debug)]
-pub struct MillData {
-    revs: u32,
-    linear_move: i32,
-}
-
-/// Mill FSM wrapper that includes data and state machine
-pub struct MillFSM {
+/// Mill FSM wrapper that integrates rust-fsm with our data and framework
+#[derive(Debug)]
+pub struct MillFsm {
     machine: mill_fsm::StateMachine,
-    data: MillData,
+    data: Box<MillData>,
 }
 
-impl MillFSM {
-    pub fn new() -> Self {
+impl MillFsm {
+    pub fn new(data: Box<MillData>) -> Self {
         Self {
             machine: mill_fsm::StateMachine::new(),
-            data: MillData::default(),
+            data,
         }
     }
 
-    /// Handle commands and update state and data
-    pub fn handle_command(&mut self, cmd: MillCommand) -> MillResponse {
-        let current_state = match self.machine.state() {
-            mill_fsm::State::Off => "Off",
-            mill_fsm::State::Spinning => "Spinning",
-            mill_fsm::State::Moving => "Moving",
-        };
+    /// Get current state name using rust-fsm's built-in capabilities
+    pub fn get_state_name(&self) -> String {
+        // rust-fsm generates Debug implementation that gives us the state name
+        format!("{:?}", self.machine.state())
+    }
+}
 
-        let result = match (&cmd, self.machine.state()) {
-            (MillCommand::StartSpinning(revs), mill_fsm::State::Off) => {
+impl From<Box<MillData>> for MillFsm {
+    fn from(data: Box<MillData>) -> Self {
+        Self::new(data)
+    }
+}
+
+impl StateHandler<MillCommand, MillResponse, MillFsm> for MillFsm {
+    fn handle_cmd(mut self, cmd: MillCommand) -> (MillFsm, MillResponse) {
+        // rust-fsm provides compile-time guarantees that only valid transitions
+        // will succeed, eliminating the need for manual state/command matching
+        let result = match &cmd {
+            MillCommand::StartSpinning(revs) => {
                 self.data.revs = *revs;
-                match self.machine.consume(&mill_fsm::Input::StartSpinning) {
-                    Ok(Some(mill_fsm::Output::SpinningStarted)) => Some("Spinning"),
-                    _ => None,
-                }
+                self.machine.consume(&mill_fsm::Input::StartSpinning)
             }
-            (MillCommand::StopSpinning, mill_fsm::State::Spinning) => {
+            MillCommand::StopSpinning => {
                 self.data.revs = 0;
-                match self.machine.consume(&mill_fsm::Input::StopSpinning) {
-                    Ok(Some(mill_fsm::Output::SpinningStopped)) => Some("Off"),
-                    _ => None,
-                }
+                self.machine.consume(&mill_fsm::Input::StopSpinning)
             }
-            (MillCommand::Move(linear_move), mill_fsm::State::Spinning) => {
+            MillCommand::Move(linear_move) => {
                 self.data.linear_move = *linear_move;
-                match self.machine.consume(&mill_fsm::Input::Move) {
-                    Ok(Some(mill_fsm::Output::MovingStarted)) => Some("Moving"),
-                    _ => None,
-                }
+                self.machine.consume(&mill_fsm::Input::Move)
             }
-            (MillCommand::StopMoving, mill_fsm::State::Moving) => {
+            MillCommand::StopMoving => {
                 self.data.linear_move = 0;
-                match self.machine.consume(&mill_fsm::Input::StopMoving) {
-                    Ok(Some(mill_fsm::Output::MovingStopped)) => Some("Spinning"),
-                    _ => None,
-                }
+                self.machine.consume(&mill_fsm::Input::StopMoving)
             }
-            _ => None,
         };
 
-        match result {
-            Some(new_state) => MillResponse::Status { state: new_state },
-            None => MillResponse::InvalidTransition {
-                current_state,
+        let response = match result {
+            Ok(_) => MillResponse::Status {
+                state: self.get_state_name(),
+            },
+            Err(_) => MillResponse::InvalidTransition {
+                current_state: self.get_state_name(),
                 attempted_command: format!("{:?}", cmd),
             },
-        }
-    }
+        };
 
-    pub fn get_data(&self) -> &MillData {
-        &self.data
-    }
-
-    pub fn get_state_name(&self) -> &'static str {
-        match self.machine.state() {
-            mill_fsm::State::Off => "Off",
-            mill_fsm::State::Spinning => "Spinning",
-            mill_fsm::State::Moving => "Moving",
-        }
+        (self, response)
     }
 }
 
-/// Controller for managing the mill FSM in a separate thread
-pub struct MillController {
-    cmd_tx: mpsc::Sender<MillCommand>,
-    response_rx: mpsc::Receiver<MillResponse>,
-    #[allow(dead_code)]
-    thread_handle: JoinHandle<()>,
-    shutdown_tx: mpsc::Sender<()>,
-}
+// Type aliases and controller setup using the generic framework
+pub type FsmController = MachineController<MillCommand, MillResponse>;
 
-impl MillController {
-    pub fn new() -> Self {
-        let (cmd_tx, cmd_rx) = mpsc::channel();
-        let (response_tx, response_rx) = mpsc::channel();
-        let (shutdown_tx, shutdown_rx) = mpsc::channel();
-
-        let thread_handle = thread::spawn(move || {
-            let mut mill = MillFSM::new();
-            let timeout = Duration::from_millis(100);
-
-            loop {
-                match shutdown_rx.try_recv() {
-                    Ok(()) => {
-                        println!("Mill FSM shutdown requested - terminating");
-                        break;
-                    }
-                    Err(mpsc::TryRecvError::Disconnected) => {
-                        println!("Mill FSM controller disconnected - terminating");
-                        break;
-                    }
-                    Err(mpsc::TryRecvError::Empty) => {
-                        // No shutdown signal, continue processing
-                    }
-                }
-
-                match cmd_rx.recv_timeout(timeout) {
-                    Ok(cmd) => {
-                        let response = mill.handle_command(cmd);
-
-                        if response_tx.send(response).is_err() {
-                            println!("Mill FSM response receiver disconnected - terminating");
-                            break;
-                        }
-                    }
-                    Err(mpsc::RecvTimeoutError::Timeout) => {
-                        continue;
-                    }
-                    Err(mpsc::RecvTimeoutError::Disconnected) => {
-                        println!("Mill FSM command sender disconnected - terminating");
-                        break;
-                    }
-                }
-            }
-
-            println!("Mill FSM thread terminated");
-        });
-
-        Self {
-            cmd_tx,
-            response_rx,
-            thread_handle,
-            shutdown_tx,
-        }
-    }
-
-    pub fn send_command(&self, cmd: MillCommand) -> Result<(), mpsc::SendError<MillCommand>> {
-        self.cmd_tx.send(cmd)
-    }
-
-    pub fn check_responses(&self) -> Vec<MillResponse> {
-        let mut responses = Vec::new();
-        while let Ok(response) = self.response_rx.try_recv() {
-            responses.push(response);
-        }
-        responses
-    }
-
+impl FsmController {
     pub fn create(data: Box<MillData>) -> Self {
-        // For compatibility with the existing API, we ignore the data parameter
-        // since our controller creates its own MillFSM with default data
-        let _ = data;
-        Self::new()
+        MachineController::new::<Box<MillData>, MillFsm>(data)
     }
 }
-
-impl Drop for MillController {
-    fn drop(&mut self) {
-        let _ = self.shutdown_tx.send(());
-    }
-}
-
-// Type aliases for compatibility with existing code
-pub type FsmController = MillController;
 
 #[cfg(test)]
 mod tests {
+    use super::*;
 
     mod controller_tests {
         use super::*;
 
         fn setup_mill_controller() -> FsmController {
-            FsmController::new()
+            let mill_data = Box::new(MillData::default());
+            FsmController::create(mill_data)
         }
 
         #[test]
@@ -243,7 +150,12 @@ mod tests {
             std::thread::sleep(std::time::Duration::from_millis(10));
             let responses = mill_controller.check_responses();
             assert_eq!(responses.len(), 1);
-            assert_eq!(responses[0], MillResponse::Status { state: "Spinning" });
+            assert_eq!(
+                responses[0],
+                MillResponse::Status {
+                    state: "Spinning".to_string()
+                }
+            );
         }
 
         #[test]
@@ -266,10 +178,30 @@ mod tests {
             std::thread::sleep(std::time::Duration::from_millis(10));
             let responses = mill_controller.check_responses();
             assert_eq!(responses.len(), 4);
-            assert_eq!(responses[0], MillResponse::Status { state: "Spinning" });
-            assert_eq!(responses[1], MillResponse::Status { state: "Moving" });
-            assert_eq!(responses[2], MillResponse::Status { state: "Spinning" });
-            assert_eq!(responses[3], MillResponse::Status { state: "Off" });
+            assert_eq!(
+                responses[0],
+                MillResponse::Status {
+                    state: "Spinning".to_string()
+                }
+            );
+            assert_eq!(
+                responses[1],
+                MillResponse::Status {
+                    state: "Moving".to_string()
+                }
+            );
+            assert_eq!(
+                responses[2],
+                MillResponse::Status {
+                    state: "Spinning".to_string()
+                }
+            );
+            assert_eq!(
+                responses[3],
+                MillResponse::Status {
+                    state: "Off".to_string()
+                }
+            );
         }
 
         #[test]
@@ -289,70 +221,100 @@ mod tests {
             std::thread::sleep(std::time::Duration::from_millis(10));
             let responses = mill_controller.check_responses();
             assert_eq!(responses.len(), 3);
-            assert_eq!(responses[0], MillResponse::Status { state: "Spinning" });
-            assert_eq!(responses[1], MillResponse::Status { state: "Moving" });
+            assert_eq!(
+                responses[0],
+                MillResponse::Status {
+                    state: "Spinning".to_string()
+                }
+            );
+            assert_eq!(
+                responses[1],
+                MillResponse::Status {
+                    state: "Moving".to_string()
+                }
+            );
             assert_eq!(
                 responses[2],
                 MillResponse::InvalidTransition {
-                    current_state: "Moving",
+                    current_state: "Moving".to_string(),
                     attempted_command: String::from("StopSpinning"),
                 }
             );
         }
     }
 
-    use super::*;
     mod state_transitions {
         use super::*;
 
-        fn setup() -> MillFSM {
-            MillFSM::new()
+        fn setup() -> MillFsm {
+            let data = Box::new(MillData::default());
+            MillFsm::new(data)
         }
 
         #[test]
         fn off_to_spinning() {
-            let mut mill_fsm = setup();
+            let mill_fsm = setup();
 
-            let response = mill_fsm.handle_command(MillCommand::StartSpinning(12));
+            let (mill_fsm, response) = mill_fsm.handle_cmd(MillCommand::StartSpinning(12));
 
             assert_eq!(12, mill_fsm.data.revs);
-            assert_eq!(response, MillResponse::Status { state: "Spinning" });
+            assert_eq!(
+                response,
+                MillResponse::Status {
+                    state: "Spinning".to_string()
+                }
+            );
         }
 
         #[test]
         fn spinning_to_moving() {
-            let mut mill_fsm = setup();
-            mill_fsm.handle_command(MillCommand::StartSpinning(12));
+            let mill_fsm = setup();
+            let (mill_fsm, _) = mill_fsm.handle_cmd(MillCommand::StartSpinning(12));
 
-            let response = mill_fsm.handle_command(MillCommand::Move(66));
+            let (mill_fsm, response) = mill_fsm.handle_cmd(MillCommand::Move(66));
 
             assert_eq!(12, mill_fsm.data.revs);
             assert_eq!(66, mill_fsm.data.linear_move);
-            assert_eq!(response, MillResponse::Status { state: "Moving" });
+            assert_eq!(
+                response,
+                MillResponse::Status {
+                    state: "Moving".to_string()
+                }
+            );
         }
 
         #[test]
         fn spinning_to_off() {
-            let mut mill_fsm = setup();
-            mill_fsm.handle_command(MillCommand::StartSpinning(12));
+            let mill_fsm = setup();
+            let (mill_fsm, _) = mill_fsm.handle_cmd(MillCommand::StartSpinning(12));
 
-            let response = mill_fsm.handle_command(MillCommand::StopSpinning);
+            let (mill_fsm, response) = mill_fsm.handle_cmd(MillCommand::StopSpinning);
 
             assert_eq!(0, mill_fsm.data.revs);
-            assert_eq!(response, MillResponse::Status { state: "Off" });
+            assert_eq!(
+                response,
+                MillResponse::Status {
+                    state: "Off".to_string()
+                }
+            );
         }
 
         #[test]
         fn moving_to_spinning() {
-            let mut mill_fsm = setup();
-            mill_fsm.handle_command(MillCommand::StartSpinning(12));
-            mill_fsm.handle_command(MillCommand::Move(66));
+            let mill_fsm = setup();
+            let (mill_fsm, _) = mill_fsm.handle_cmd(MillCommand::StartSpinning(12));
+            let (mill_fsm, _) = mill_fsm.handle_cmd(MillCommand::Move(66));
 
-            let response = mill_fsm.handle_command(MillCommand::StopMoving);
+            let (mill_fsm, response) = mill_fsm.handle_cmd(MillCommand::StopMoving);
 
             assert_eq!(12, mill_fsm.data.revs);
             assert_eq!(0, mill_fsm.data.linear_move);
-            assert_eq!(response, MillResponse::Status { state: "Spinning" });
+            assert_eq!(
+                response,
+                MillResponse::Status {
+                    state: "Spinning".to_string()
+                }
+            );
         }
 
         #[test]
@@ -361,7 +323,7 @@ mod tests {
             println!(
                 "Mill FSM state: {}, data: {:?}",
                 mill_fsm.get_state_name(),
-                mill_fsm.get_data()
+                mill_fsm.data
             );
         }
     }
